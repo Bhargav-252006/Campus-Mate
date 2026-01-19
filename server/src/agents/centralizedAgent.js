@@ -4,7 +4,7 @@ const cognitiveLoadAgent = require('./cognitiveLoadAgent');
 const personaSwitchAgent = require('./personaSwitchAgent');
 const failurePatternAgent = require('./failurePatternAgent');
 const conceptGapAgent = require('./conceptGapAgent');
-const memoryManager = require('../utils/memoryManager');
+const memoryManager = require('../utils/memoryManagerV3');
 const {callLLM} = require('../utils/llmService');
 const logger = require('../utils/logger');
 
@@ -124,7 +124,9 @@ class CentralizedAgent {
         logger.debug('Classifying intent...');
 
         const llmClassification = await callLLM(CLASSIFIER_PROMPT, message, {
-            temperature: 0.1  // Low temperature for consistent classification
+            temperature: 0.1,  // Low temperature for consistent classification
+            maxTokens: 300,  // Higher limit for reasoning models
+            taskType: 'classification'  // Use Trinity Mini for fast routing
         });
 
         if (llmClassification) {
@@ -260,7 +262,8 @@ INSTRUCTIONS:
 
         const response = await callLLM(systemPrompt, message, {
             temperature: 0.8,
-            maxTokens: 300
+            maxTokens: 300,
+            taskType: 'conversation'  // Use main model for general conversation
         }, conversationHistory);
 
         // Fallback if LLM fails

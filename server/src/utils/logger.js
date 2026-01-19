@@ -85,7 +85,7 @@ const logger = {
         const timestamp = getTimestamp();
         console.log(`${colors.blue}[${timestamp}]${colors.reset} ${icons.info} ${message}`);
         if (data) console.log(`   └─ ${colors.cyan}${JSON.stringify(data)}${colors.reset}`);
-        writeToFile('INFO', message, data);
+        // File logging disabled
     },
 
     /**
@@ -95,7 +95,7 @@ const logger = {
         const timestamp = getTimestamp();
         console.log(`${colors.green}[${timestamp}]${colors.reset} ${icons.success} ${colors.green}${message}${colors.reset}`);
         if (data) console.log(`   └─ ${colors.cyan}${JSON.stringify(data)}${colors.reset}`);
-        writeToFile('SUCCESS', message, data);
+        // File logging disabled
     },
 
     /**
@@ -105,7 +105,7 @@ const logger = {
         const timestamp = getTimestamp();
         console.log(`${colors.yellow}[${timestamp}]${colors.reset} ${icons.warning} ${colors.yellow}${message}${colors.reset}`);
         if (data) console.log(`   └─ ${colors.yellow}${JSON.stringify(data)}${colors.reset}`);
-        writeToFile('WARNING', message, data);
+        // File logging disabled
     },
 
     /**
@@ -122,7 +122,7 @@ const logger = {
             }
         }
         console.log('!'.repeat(60) + '\n');
-        writeToFile('ERROR', message, {error: error?.message, stack: error?.stack});
+        // File logging disabled
     },
 
     /**
@@ -144,7 +144,7 @@ const logger = {
         const statusColor = status >= 400 ? colors.red : colors.green;
         const statusText = status ? ` → ${statusColor}${status}${colors.reset}` : '';
         console.log(`${colors.cyan}[${timestamp}]${colors.reset} ${icons.api} ${method} ${path}${statusText}`);
-        writeToFile('API', `${method} ${path}`, {status});
+        // File logging disabled
     },
 
     /**
@@ -155,7 +155,7 @@ const logger = {
         const icon = status === 'success' ? icons.success : status === 'error' ? icons.error : icons.llm;
         const color = status === 'success' ? colors.green : status === 'error' ? colors.red : colors.blue;
         console.log(`${color}[${timestamp}]${colors.reset} ${icon} [LLM/${provider}] ${details || status}`);
-        writeToFile('LLM', `${provider}: ${status}`, details);
+        // File logging disabled
     },
 
     /**
@@ -165,7 +165,7 @@ const logger = {
         const timestamp = getTimestamp();
         console.log(`${colors.magenta}[${timestamp}]${colors.reset} ${icons.agent} [${agentName}] ${action}`);
         if (details) console.log(`   └─ ${colors.cyan}${details}${colors.reset}`);
-        writeToFile('AGENT', `${agentName}: ${action}`, details);
+        // File logging disabled
     },
 
     /**
@@ -175,7 +175,7 @@ const logger = {
         const timestamp = getTimestamp();
         console.log(`${colors.cyan}[${timestamp}]${colors.reset} ${icons.memory} [Memory] ${action}`);
         if (details) console.log(`   └─ ${colors.cyan}${details}${colors.reset}`);
-        writeToFile('MEMORY', action, details);
+        // File logging disabled
     },
 
     /**
@@ -185,7 +185,7 @@ const logger = {
         const timestamp = getTimestamp();
         console.log(`${colors.blue}[${timestamp}]${colors.reset} ${icons.user} [User:${userId}] ${action}`);
         if (details) console.log(`   └─ ${details}`);
-        writeToFile('USER', `${userId}: ${action}`, details);
+        // File logging disabled
     },
 
     /**

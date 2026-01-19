@@ -120,7 +120,8 @@ class PersonaSwitchAgent {
             userPrompt,
             {
                 maxTokens: this.config.maxTokens,
-                temperature: this.config.temperature
+                temperature: this.config.temperature,
+                taskType: 'creative'  // Use creative model for persona switching
             }
         );
 

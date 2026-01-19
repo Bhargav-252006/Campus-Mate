@@ -4,7 +4,9 @@ const cognitiveLoadAgent = require('./cognitiveLoadAgent');
 const personaSwitchAgent = require('./personaSwitchAgent');
 const failurePatternAgent = require('./failurePatternAgent');
 const conceptGapAgent = require('./conceptGapAgent');
-const memoryManager = require('../utils/memoryManager');
+const memoryManager = require('../utils/memoryManagerV3');  // V3: Debounced saves, importance scoring, tiered memory
+const promptAssembler = require('../utils/promptAssembler');
+const toolExecutor = require('../utils/toolExecutor');  // 🔧 NEW: Tool Executor
 const {callLLM} = require('../utils/llmService');
 const {getStudentMatePersona, getAdaptiveTone, getContinuityPrompt} = require('./studentMatePersona');
 const logger = require('../utils/logger');
@@ -70,6 +72,60 @@ const KEYWORD_RULES = {
         'hi', 'hello', 'hey', 'good morning', 'good evening', 'good night',
         'howdy', 'sup', "what's up", 'how are you', 'thanks', 'thank you', 'bye'
     ]
+};
+
+// ═══════════════════════════════════════════════════════════════
+//                    🔧 TOOL KEYWORDS (Direct Tool Triggers)
+// ═══════════════════════════════════════════════════════════════
+
+const TOOL_KEYWORDS = {
+    // Pomodoro
+    startPomodoro: ['start pomodoro', 'start a pomodoro', 'pomodoro', 'focus session', 'start focus', 'study session', 'start studying for'],
+    endPomodoro: ['end pomodoro', 'stop pomodoro', 'done studying', 'finished studying', 'end focus', 'stop focus'],
+    getPomodoroStats: ['pomodoro stats', 'focus stats', 'how much studied', 'study time', 'focus time'],
+
+    // Mood
+    logMood: ["i'm feeling", "i feel", "feeling", "my mood", "log mood", "i am feeling"],
+    getMoodHistory: ['mood history', 'how have i been feeling', 'my moods', 'past moods'],
+    getMoodTrends: ['mood trends', 'mood patterns', 'mood insights', 'mood analysis'],
+
+    // Deadlines
+    addDeadline: ['due on', 'due by', 'deadline', 'assignment due', 'exam on', 'project due', 'submit by'],
+    getDeadlines: ['my deadlines', 'show deadlines', 'list deadlines', 'all deadlines'],
+    getUpcomingDeadlines: ["what's due", 'upcoming deadlines', 'due soon', 'due this week', 'coming up'],
+
+    // Quiz
+    generateQuiz: ['quiz me', 'test me', 'create quiz', 'generate quiz', 'practice questions', 'give me a quiz'],
+
+    // Search
+    webSearch: ['search for', 'look up', 'find information', 'search the web', 'google'],
+    youtubeSearch: ['youtube', 'find videos', 'video tutorial', 'watch videos', 'educational video'],
+
+    // Reminders
+    setReminder: ['remind me', 'set reminder', 'set a reminder', 'reminder to', 'remember to'],
+    getReminders: ['my reminders', 'show reminders', 'list reminders'],
+
+    // Notes
+    saveNote: ['save note', 'note this', 'remember this', 'save this'],
+    getNotes: ['my notes', 'show notes', 'list notes'],
+
+    // Study Plans
+    createStudyPlan: ['create study plan', 'study schedule', 'study plan for', 'help me plan'],
+    getTodaysTasks: ["what's today", 'today tasks', "what should i do today", 'today schedule']
+};
+
+// ═══════════════════════════════════════════════════════════════
+//                    🔧 AGENT → TOOL MAPPING
+// ═══════════════════════════════════════════════════════════════
+
+const AGENT_TOOLS = {
+    COGNITIVE: ['startPomodoro', 'endPomodoro', 'getPomodoroStats', 'addDeadline', 'getDeadlines',
+        'getUpcomingDeadlines', 'markDeadlineComplete', 'setReminder', 'getReminders',
+        'createStudyPlan', 'getStudyPlan', 'getTodaysTasks', 'markTaskComplete'],
+    EMOTIONAL: ['logMood', 'getMoodHistory', 'getMoodTrends'],
+    ACADEMIC: ['generateQuiz', 'getQuizzes', 'saveQuizResult', 'webSearch', 'wikipediaSummary',
+        'youtubeSearch', 'saveNote', 'getNotes', 'searchNotes'],
+    GENERAL: ['setReminder', 'getReminders', 'getTodaysTasks', 'getUpcomingDeadlines']
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -145,20 +201,43 @@ class CentralizedAgent {
         logger.separator('PROCESSING MESSAGE');
         logger.user(userId, message);
 
-        // Step 1: Store message in memory
+        // Step 1: Store message in memory (auto-extracts useful info)
         memoryManager.addMessage(userId, {sender: 'user', text: message});
 
-        // Step 2: Get context, user patterns, and profile
-        const context = memoryManager.getContext(userId);
-        const userPatterns = memoryManager.detectPatterns(userId);
+        // Step 2: Get ALL memory components separately
         const profile = memoryManager.getProfile(userId);
+        const preferences = memoryManager.getPreferences(userId);
+        const summary = memoryManager.getSummary(userId);
+        const recentMessages = memoryManager.getRecentMessages(userId, 5);
+        const patterns = memoryManager.getPatterns(userId);
+
+        // Legacy context for backward compatibility
+        const context = memoryManager.getContext(userId);
+
+        // 🔧 Step 2.5: CHECK FOR DIRECT TOOL TRIGGERS
+        const toolTrigger = this.detectToolTrigger(message);
+        if (toolTrigger) {
+            logger.info(`🔧 Direct tool trigger detected: ${toolTrigger.tool}`);
+            const toolResponse = await this.handleToolRequest(toolTrigger, message, userId, profile);
+            if (toolResponse) {
+                memoryManager.addMessage(userId, {sender: 'bot', text: toolResponse.text});
+                return toolResponse;
+            }
+        }
 
         // Step 3: 🔒 CHECK ACTIVE SESSION & SMART CLASSIFICATION
         const classification = await this.smartClassifyWithContext(message, userId);
         logger.info(`Final Classification: ${classification.agent} (confidence: ${classification.confidence.toFixed(2)}, source: ${classification.source})`);
 
-        // Step 4: ROUTE to appropriate sub-agent
-        const response = await this.routeToSubAgent(classification, message, context, userPatterns, profile, userId);
+        // Step 4: ROUTE to appropriate sub-agent (with new memory structure)
+        const response = await this.routeToSubAgent(
+            classification,
+            message,
+            {context, profile, preferences, summary, recentMessages, patterns},
+            patterns,  // Legacy param
+            profile,   // Legacy param
+            userId
+        );
 
         // Step 5: Store response in memory
         memoryManager.addMessage(userId, {sender: 'bot', text: response.text});
@@ -396,6 +475,668 @@ class CentralizedAgent {
     }
 
     // ═══════════════════════════════════════════════════════════════
+    //                    🔧 TOOL DETECTION & EXECUTION
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * Words that indicate the user is asking about the bot/memory itself (NOT a Wikipedia topic)
+     */
+    static SELF_REFERENCE_PATTERNS = [
+        /\b(your|you|my)\s+(memory|memories|data|knowledge|mind|brain)/i,
+        /\b(remember|recall|know about me|stored|saved)\b/i,
+        /\babout me\b/i,
+        /\bdo you (remember|know|have)\b/i,
+        /\bin (your|the) (memory|system)\b/i
+    ];
+
+    /**
+     * Detect if message triggers a tool directly
+     */
+    detectToolTrigger(message) {
+        const lowerMsg = message.toLowerCase();
+
+        for (const [toolName, keywords] of Object.entries(TOOL_KEYWORDS)) {
+            for (const keyword of keywords) {
+                if (lowerMsg.includes(keyword)) {
+                    // 🛡️ SPECIAL CASE: Prevent Wikipedia trigger for self-referential questions
+                    if (toolName === 'wikipediaSummary') {
+                        // Check if user is asking about bot's memory/knowledge, not a Wikipedia topic
+                        const isSelfReference = CentralizedAgent.SELF_REFERENCE_PATTERNS.some(
+                            pattern => pattern.test(message)
+                        );
+                        if (isSelfReference) {
+                            logger.debug(`Skipping wikipediaSummary - user asking about bot memory, not a topic`);
+                            continue;
+                        }
+
+                        // Extract what comes after "what is" - if too short or generic, skip
+                        const afterKeyword = lowerMsg.replace(/^.*?(what is|who is|define|tell me about)\s*/i, '').trim();
+                        if (afterKeyword.length < 3 || /^(it|this|that|there|here)$/i.test(afterKeyword)) {
+                            logger.debug(`Skipping wikipediaSummary - topic "${afterKeyword}" too short/generic`);
+                            continue;
+                        }
+                    }
+
+                    logger.debug(`Tool trigger detected: ${toolName} (keyword: "${keyword}")`);
+                    return {tool: toolName, keyword, message};
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Handle a direct tool request
+     */
+    async handleToolRequest(toolTrigger, message, userId, profile) {
+        const {tool} = toolTrigger;
+        const lowerMsg = message.toLowerCase();
+
+        try {
+            let result;
+            let responseText;
+
+            switch (tool) {
+                // ═══════════════════════════════════════════════════
+                // 🍅 POMODORO TOOLS
+                // ═══════════════════════════════════════════════════
+                case 'startPomodoro': {
+                    // Extract subject from message
+                    const subject = this.extractSubject(message) || 'study session';
+                    const duration = this.extractNumber(message, 'minutes') || 25;
+
+                    result = await toolExecutor.execute('startPomodoro', {
+                        subject,
+                        duration,
+                        breakTime: 5
+                    }, userId);
+
+                    if (result.success) {
+                        const r = result.result;
+                        responseText = `🍅 **Pomodoro Started!**\n\nFocus on **${subject}** for **${duration} minutes**.\n\n**Tips:**\n${r.tips.map(t => `- ${t}`).join('\n')}\n\nI'll be here when you're done! Say "end pomodoro" when finished. 💪`;
+                    }
+                    break;
+                }
+
+                case 'endPomodoro': {
+                    result = await toolExecutor.execute('endPomodoro', {
+                        completed: true,
+                        notes: ''
+                    }, userId);
+
+                    if (result.success) {
+                        const r = result.result;
+                        responseText = `${r.message}\n\n🔥 **Current Streak:** ${r.streak} sessions\n⏱️ **Total Focus Time:** ${r.totalFocusTime} minutes\n\n${r.suggestion}`;
+                    } else {
+                        responseText = "You don't have an active pomodoro session! Say \"start pomodoro for [subject]\" to begin one. 🍅";
+                    }
+                    break;
+                }
+
+                case 'getPomodoroStats': {
+                    const period = lowerMsg.includes('today') ? 'today' :
+                        lowerMsg.includes('month') ? 'month' : 'week';
+
+                    result = await toolExecutor.execute('getPomodoroStats', {period}, userId);
+
+                    if (result.success) {
+                        const r = result.result;
+                        responseText = `📊 **Pomodoro Stats (${r.period})**\n\n🍅 Sessions: **${r.totalSessions}**\n⏱️ Focus Time: **${r.totalFocusHours} hours**\n🔥 Current Streak: **${r.currentStreak}**\n📈 Avg Session: **${r.averageSessionLength} min**`;
+
+                        if (Object.keys(r.bySubject).length > 0) {
+                            responseText += `\n\n**Time by Subject:**\n${Object.entries(r.bySubject).map(([s, m]) => `- ${s}: ${m} min`).join('\n')}`;
+                        }
+                    }
+                    break;
+                }
+
+                // ═══════════════════════════════════════════════════
+                // 🧠 MOOD TOOLS
+                // ═══════════════════════════════════════════════════
+                case 'logMood': {
+                    const mood = this.extractMood(message);
+                    const energy = this.extractNumber(message, 'energy') || 5;
+
+                    result = await toolExecutor.execute('logMood', {
+                        mood,
+                        energy,
+                        notes: message,
+                        triggers: []
+                    }, userId);
+
+                    if (result.success) {
+                        const r = result.result;
+                        responseText = `${r.message}\n\n💡 **Suggestion:** ${r.suggestion}\n\n💙 ${r.affirmation}`;
+                    }
+                    break;
+                }
+
+                case 'getMoodHistory': {
+                    result = await toolExecutor.execute('getMoodHistory', {days: 7}, userId);
+
+                    if (result.success) {
+                        const r = result.result;
+                        if (r.count === 0) {
+                            responseText = "You haven't logged any moods yet! Tell me how you're feeling and I'll track it for you. 🧠";
+                        } else {
+                            responseText = `📊 **Mood History (${r.period})**\n\n${r.entries.slice(0, 5).map(e =>
+                                `- ${new Date(e.timestamp).toLocaleDateString()}: ${e.mood} (Energy: ${e.energy}/10)`
+                            ).join('\n')}`;
+                        }
+                    }
+                    break;
+                }
+
+                case 'getMoodTrends': {
+                    result = await toolExecutor.execute('getMoodTrends', {days: 30}, userId);
+
+                    if (result.success) {
+                        const r = result.result;
+                        if (r.entriesNeeded) {
+                            responseText = `I need a few more mood entries to show you trends. Log ${r.entriesNeeded} more moods! 📊`;
+                        } else {
+                            responseText = `🧠 **Mood Insights (Last 30 Days)**\n\n📝 Total Entries: ${r.totalEntries}\n${r.mostCommonMood ? `😊 Most Common: ${r.mostCommonMood.mood}` : ''}\n\n**💡 Insights:**\n${r.insights.map(i => `- ${i}`).join('\n')}\n\n${r.recommendation}`;
+                        }
+                    }
+                    break;
+                }
+
+                // ═══════════════════════════════════════════════════
+                // 📅 DEADLINE TOOLS
+                // ═══════════════════════════════════════════════════
+                case 'addDeadline': {
+                    const title = this.extractTaskTitle(message);
+                    const dueDate = this.extractDate(message);
+                    const subject = this.extractSubject(message) || 'General';
+
+                    if (!dueDate) {
+                        responseText = "I need a due date! Try: \"My essay is due on January 15th\" 📅";
+                        break;
+                    }
+
+                    result = await toolExecutor.execute('addDeadline', {
+                        title,
+                        dueDate,
+                        subject,
+                        priority: 'medium',
+                        type: 'assignment'
+                    }, userId);
+
+                    if (result.success) {
+                        const r = result.result;
+                        responseText = `${r.message}\n\n💡 ${r.tip}`;
+                    }
+                    break;
+                }
+
+                case 'getDeadlines':
+                case 'getUpcomingDeadlines': {
+                    result = await toolExecutor.execute('getUpcomingDeadlines', {days: 7}, userId);
+
+                    if (result.success) {
+                        const r = result.result;
+                        if (r.total === 0) {
+                            responseText = "You have no upcoming deadlines! 🎉 That's either great planning or time to add some!";
+                        } else {
+                            responseText = `📅 **Upcoming Deadlines**\n\n${r.message}\n\n`;
+
+                            if (r.overdue.count > 0) {
+                                responseText += `🚨 **OVERDUE:**\n${r.overdue.items.map(d => `- ${d.title} (${d.subject})`).join('\n')}\n\n`;
+                            }
+                            if (r.urgent.count > 0) {
+                                responseText += `⚠️ **DUE IN 2 DAYS:**\n${r.urgent.items.map(d => `- ${d.title} - ${new Date(d.dueDate).toLocaleDateString()}`).join('\n')}\n\n`;
+                            }
+                            if (r.thisWeek.count > 0) {
+                                responseText += `📌 **THIS WEEK:**\n${r.thisWeek.items.map(d => `- ${d.title} - ${new Date(d.dueDate).toLocaleDateString()}`).join('\n')}`;
+                            }
+                        }
+                    }
+                    break;
+                }
+
+                // ═══════════════════════════════════════════════════
+                // 📝 QUIZ TOOLS
+                // ═══════════════════════════════════════════════════
+                case 'generateQuiz': {
+                    const topic = this.extractSubject(message) || this.extractAfterKeyword(message, ['on', 'about', 'for']);
+                    const numQuestions = this.extractNumber(message, 'questions') || 5;
+                    const difficulty = lowerMsg.includes('hard') ? 'hard' :
+                        lowerMsg.includes('easy') ? 'easy' : 'medium';
+
+                    if (!topic) {
+                        responseText = "What topic should I quiz you on? Try: \"Quiz me on photosynthesis\" 📝";
+                        break;
+                    }
+
+                    result = await toolExecutor.execute('generateQuiz', {
+                        topic,
+                        difficulty,
+                        numQuestions,
+                        type: 'mixed'
+                    }, userId);
+
+                    if (result.success) {
+                        responseText = `📝 **Quiz: ${topic}** (${difficulty}, ${numQuestions} questions)\n\nI've created a quiz for you! Here's what we'll cover:\n\n🎯 Topic: **${topic}**\n📊 Difficulty: **${difficulty}**\n❓ Questions: **${numQuestions}**\n\nLet me ask you the questions one by one. Ready?\n\n**Question 1:** What is the main concept of ${topic}? 🤔`;
+                    }
+                    break;
+                }
+
+                // ═══════════════════════════════════════════════════
+                // 🔍 SEARCH TOOLS
+                // ═══════════════════════════════════════════════════
+                case 'webSearch': {
+                    const query = this.extractAfterKeyword(message, ['search for', 'look up', 'find', 'search']);
+
+                    if (!query) {
+                        responseText = "What would you like me to search for? 🔍";
+                        break;
+                    }
+
+                    result = await toolExecutor.execute('webSearch', {query, maxResults: 5}, userId);
+
+                    if (result.success && result.result.results?.length > 0) {
+                        const r = result.result;
+                        responseText = `🔍 **Search Results: "${query}"**\n\n`;
+                        r.results.slice(0, 3).forEach((res, i) => {
+                            responseText += `**${i + 1}. ${res.title}**\n${res.snippet}\n${res.url ? `🔗 ${res.url}\n` : ''}\n`;
+                        });
+                    } else {
+                        responseText = `I couldn't find instant results for "${query}". Try searching directly: https://duckduckgo.com/?q=${encodeURIComponent(query)}`;
+                    }
+                    break;
+                }
+
+                case 'wikipediaSummary': {
+                    // Extract topic - remove common prefixes
+                    let topic = message.replace(/^(what is|who is|tell me about|define|wikipedia:?)\s*/i, '').trim();
+                    topic = topic.replace(/[?.!]$/, ''); // Remove trailing punctuation
+
+                    if (!topic) {
+                        responseText = "What topic would you like to learn about? 📚";
+                        break;
+                    }
+
+                    result = await toolExecutor.execute('wikipediaSummary', {topic, sentences: 4}, userId);
+
+                    if (result.success && result.result.summary) {
+                        const r = result.result;
+                        responseText = `📚 **${r.title}**\n\n${r.summary}\n\n🔗 [Read more on Wikipedia](${r.url})`;
+                    } else if (result.result?.type === 'search') {
+                        const r = result.result;
+                        responseText = `📚 I found some related Wikipedia articles for "${topic}":\n\n${r.results.slice(0, 3).map((res, i) => `${i + 1}. **${res.title}**\n   ${res.snippet.substring(0, 100)}...`).join('\n\n')}`;
+                    } else {
+                        responseText = `I couldn't find a Wikipedia article for "${topic}". Try a different search term! 📚`;
+                    }
+                    break;
+                }
+
+                case 'youtubeSearch': {
+                    const query = this.extractAfterKeyword(message, ['youtube', 'videos about', 'video tutorial', 'find videos', 'watch']);
+
+                    if (!query) {
+                        responseText = "What topic would you like video tutorials on? 🎥";
+                        break;
+                    }
+
+                    result = await toolExecutor.execute('youtubeSearch', {query, type: 'educational'}, userId);
+
+                    if (result.success) {
+                        const r = result.result;
+                        responseText = `🎥 **YouTube: "${query}"**\n\n🔗 [Search on YouTube](${r.directSearch.url})\n\n**📺 Recommended Channels:**\n${r.recommendedChannels.map(ch => `- [${ch.name}](${ch.url}) - ${ch.topic}`).join('\n')}\n\n**💡 Search Tips:**\n${r.searchTips.slice(0, 2).map(t => `- ${t}`).join('\n')}`;
+                    }
+                    break;
+                }
+
+                // ═══════════════════════════════════════════════════
+                // ⏰ REMINDER TOOLS
+                // ═══════════════════════════════════════════════════
+                case 'setReminder': {
+                    const title = this.extractTaskTitle(message);
+                    const datetime = this.extractDateTime(message);
+
+                    if (!datetime) {
+                        responseText = "When should I remind you? Try: \"Remind me to submit homework at 5pm\" ⏰";
+                        break;
+                    }
+
+                    result = await toolExecutor.execute('setReminder', {
+                        title,
+                        datetime,
+                        description: ''
+                    }, userId);
+
+                    if (result.success) {
+                        responseText = result.result.message;
+                    }
+                    break;
+                }
+
+                case 'getReminders': {
+                    result = await toolExecutor.execute('getReminders', {includeCompleted: false}, userId);
+
+                    if (result.success) {
+                        const r = result.result;
+                        if (r.count === 0) {
+                            responseText = "You have no pending reminders! 🎉";
+                        } else {
+                            responseText = `⏰ **Your Reminders (${r.count})**\n\n${r.reminders.map(rem =>
+                                `- **${rem.title}** - ${new Date(rem.datetime).toLocaleString()}`
+                            ).join('\n')}`;
+                        }
+                    }
+                    break;
+                }
+
+                // ═══════════════════════════════════════════════════
+                // 📝 NOTE TOOLS
+                // ═══════════════════════════════════════════════════
+                case 'saveNote': {
+                    const content = this.extractAfterKeyword(message, ['save note', 'note this', 'remember this', 'note:']);
+
+                    if (!content) {
+                        responseText = "What would you like me to save? Try: \"Save note: [your note here]\" 📝";
+                        break;
+                    }
+
+                    result = await toolExecutor.execute('saveNote', {
+                        title: content.substring(0, 50) + (content.length > 50 ? '...' : ''),
+                        content,
+                        tags: []
+                    }, userId);
+
+                    if (result.success) {
+                        responseText = result.result.message + " I'll remember this for you! 🧠";
+                    }
+                    break;
+                }
+
+                case 'getNotes': {
+                    result = await toolExecutor.execute('getNotes', {}, userId);
+
+                    if (result.success) {
+                        const r = result.result;
+                        if (r.count === 0) {
+                            responseText = "You don't have any saved notes yet! Say \"save note: [your note]\" to save one. 📝";
+                        } else {
+                            responseText = `📝 **Your Notes (${r.count})**\n\n${r.notes.slice(0, 5).map(n =>
+                                `- **${n.title}**\n  ${n.content.substring(0, 100)}${n.content.length > 100 ? '...' : ''}`
+                            ).join('\n\n')}`;
+                        }
+                    }
+                    break;
+                }
+
+                // ═══════════════════════════════════════════════════
+                // 📚 STUDY PLAN TOOLS
+                // ═══════════════════════════════════════════════════
+                case 'createStudyPlan': {
+                    const subject = this.extractSubject(message) || 'General';
+
+                    result = await toolExecutor.execute('createStudyPlan', {
+                        subject,
+                        duration: '1 hour',
+                        frequency: 'daily',
+                        startDate: new Date().toISOString(),
+                        goals: []
+                    }, userId);
+
+                    if (result.success) {
+                        responseText = `📚 ${result.result.message}\n\nI've scheduled daily study sessions for **${subject}**. Check your tasks with "what should I do today?" 💪`;
+                    }
+                    break;
+                }
+
+                case 'getTodaysTasks': {
+                    result = await toolExecutor.execute('getTodaysTasks', {}, userId);
+
+                    if (result.success) {
+                        const r = result.result;
+                        if (r.totalTasks === 0) {
+                            responseText = "You have no scheduled tasks for today! 🎉 Enjoy or create a study plan!";
+                        } else {
+                            responseText = `📋 **Today's Tasks (${r.date})**\n\n`;
+
+                            if (r.studyTasks.length > 0) {
+                                responseText += `📚 **Study Sessions:**\n${r.studyTasks.map(t => `- ${t.subject} (${t.duration})`).join('\n')}\n\n`;
+                            }
+                            if (r.reminders.length > 0) {
+                                responseText += `⏰ **Reminders:**\n${r.reminders.map(r => `- ${r.title} at ${new Date(r.datetime).toLocaleTimeString()}`).join('\n')}`;
+                            }
+                        }
+                    }
+                    break;
+                }
+
+                default:
+                    return null; // No tool handled this
+            }
+
+            if (responseText) {
+                return {
+                    agent: 'Student Mate',
+                    text: responseText,
+                    tool: tool,
+                    toolResult: result
+                };
+            }
+
+        } catch (error) {
+            logger.error(`Tool execution error: ${tool}`, error);
+        }
+
+        return null;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //                    🔧 TOOL HELPER METHODS
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * Extract subject from message
+     */
+    extractSubject(message) {
+        const patterns = [
+            /(?:for|on|about|studying|study)\s+(.+?)(?:\s+for|\s+at|\s+on|$)/i,
+            /pomodoro\s+(?:for\s+)?(.+?)(?:\s+for|\s*$)/i,
+            /quiz\s+(?:me\s+)?(?:on\s+)?(.+?)(?:\s+with|\s*$)/i
+        ];
+
+        for (const pattern of patterns) {
+            const match = message.match(pattern);
+            if (match && match[1]) {
+                return match[1].trim().replace(/[?.!]$/, '');
+            }
+        }
+
+        // Fallback: find capitalized words that might be subjects
+        const subjects = ['math', 'physics', 'chemistry', 'biology', 'history', 'english',
+            'programming', 'calculus', 'algebra', 'science', 'geography'];
+        const lowerMsg = message.toLowerCase();
+        for (const subject of subjects) {
+            if (lowerMsg.includes(subject)) {
+                return subject.charAt(0).toUpperCase() + subject.slice(1);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Extract number from message
+     */
+    extractNumber(message, context = '') {
+        const patterns = [
+            new RegExp(`(\\d+)\\s*(?:${context}|min|minutes|hour|hours)`, 'i'),
+            /(\d+)\s*(?:min|minutes|hour|hours)/i,
+            /for\s+(\d+)/i
+        ];
+
+        for (const pattern of patterns) {
+            const match = message.match(pattern);
+            if (match) {
+                return parseInt(match[1]);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Extract mood from message
+     */
+    extractMood(message) {
+        const moods = {
+            'stressed': ['stressed', 'stress', 'overwhelmed'],
+            'anxious': ['anxious', 'anxiety', 'worried', 'nervous'],
+            'happy': ['happy', 'good', 'great', 'amazing', 'wonderful', 'excited'],
+            'sad': ['sad', 'down', 'depressed', 'unhappy', 'low'],
+            'tired': ['tired', 'exhausted', 'sleepy', 'drained', 'fatigued'],
+            'calm': ['calm', 'peaceful', 'relaxed', 'chill'],
+            'frustrated': ['frustrated', 'annoyed', 'irritated', 'angry'],
+            'motivated': ['motivated', 'pumped', 'energized', 'ready']
+        };
+
+        const lowerMsg = message.toLowerCase();
+
+        for (const [mood, keywords] of Object.entries(moods)) {
+            for (const keyword of keywords) {
+                if (lowerMsg.includes(keyword)) {
+                    return mood;
+                }
+            }
+        }
+
+        return 'neutral';
+    }
+
+    /**
+     * Extract task title from message
+     */
+    extractTaskTitle(message) {
+        // Remove common prefixes
+        let title = message
+            .replace(/^(remind me to|set reminder|reminder to|remember to|my|the)\s*/i, '')
+            .replace(/\s*(at|on|by|due|tomorrow|today|tonight).*$/i, '')
+            .trim();
+
+        return title || 'Task';
+    }
+
+    /**
+     * Extract date from message
+     */
+    extractDate(message) {
+        const lowerMsg = message.toLowerCase();
+        const today = new Date();
+
+        // Check for relative dates
+        if (lowerMsg.includes('tomorrow')) {
+            const date = new Date(today);
+            date.setDate(date.getDate() + 1);
+            return date.toISOString();
+        }
+
+        if (lowerMsg.includes('next week')) {
+            const date = new Date(today);
+            date.setDate(date.getDate() + 7);
+            return date.toISOString();
+        }
+
+        // Try to parse explicit dates
+        const datePatterns = [
+            /(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?/,  // MM/DD or MM/DD/YYYY
+            /(\w+)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s*(\d{4}))?/i,  // January 15, 2024
+            /(\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?(\w+)(?:,?\s*(\d{4}))?/i  // 15th January
+        ];
+
+        for (const pattern of datePatterns) {
+            const match = message.match(pattern);
+            if (match) {
+                const parsed = new Date(match[0]);
+                if (!isNaN(parsed.getTime())) {
+                    return parsed.toISOString();
+                }
+            }
+        }
+
+        // Try native Date parsing
+        const months = ['january', 'february', 'march', 'april', 'may', 'june',
+            'july', 'august', 'september', 'october', 'november', 'december'];
+
+        for (const month of months) {
+            if (lowerMsg.includes(month)) {
+                const regex = new RegExp(`${month}\\s+(\\d{1,2})`, 'i');
+                const match = message.match(regex);
+                if (match) {
+                    const monthIndex = months.indexOf(month);
+                    const day = parseInt(match[1]);
+                    const year = today.getFullYear();
+                    const date = new Date(year, monthIndex, day);
+
+                    // If date is in the past, assume next year
+                    if (date < today) {
+                        date.setFullYear(year + 1);
+                    }
+
+                    return date.toISOString();
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Extract datetime from message
+     */
+    extractDateTime(message) {
+        const date = this.extractDate(message) || new Date().toISOString();
+        const lowerMsg = message.toLowerCase();
+
+        // Extract time
+        const timePatterns = [
+            /(\d{1,2}):(\d{2})\s*(am|pm)?/i,
+            /(\d{1,2})\s*(am|pm)/i,
+            /at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i
+        ];
+
+        for (const pattern of timePatterns) {
+            const match = message.match(pattern);
+            if (match) {
+                let hours = parseInt(match[1]);
+                const minutes = match[2] ? parseInt(match[2]) : 0;
+                const period = match[3]?.toLowerCase();
+
+                if (period === 'pm' && hours < 12) hours += 12;
+                if (period === 'am' && hours === 12) hours = 0;
+
+                const dateObj = new Date(date);
+                dateObj.setHours(hours, minutes, 0, 0);
+                return dateObj.toISOString();
+            }
+        }
+
+        return date;
+    }
+
+    /**
+     * Extract text after a keyword
+     */
+    extractAfterKeyword(message, keywords) {
+        const lowerMsg = message.toLowerCase();
+
+        for (const keyword of keywords) {
+            const index = lowerMsg.indexOf(keyword);
+            if (index !== -1) {
+                return message.substring(index + keyword.length).trim().replace(/[?.!]$/, '');
+            }
+        }
+
+        return message.trim().replace(/[?.!]$/, '');
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     //                    CLASSIFICATION HELPERS
     // ═══════════════════════════════════════════════════════════════
 
@@ -447,8 +1188,9 @@ class CentralizedAgent {
                 LLM_CLASSIFIER_PROMPT,
                 `User message: "${message}"`,
                 {
-                    maxTokens: 100,
-                    temperature: 0.1
+                    maxTokens: 300,  // Higher limit for reasoning models (Trinity Mini uses ~200 tokens)
+                    temperature: 0.1,
+                    taskType: 'classification'  // Use Trinity Mini for fast routing
                 }
             );
 
@@ -506,8 +1248,11 @@ class CentralizedAgent {
     /**
      * Route to the appropriate sub-agent based on classification
      */
-    async routeToSubAgent(classification, message, context, userPatterns, profile, userId) {
+    async routeToSubAgent(classification, message, memoryData, userPatterns, profile, userId) {
         const {agent, confidence, source} = classification;
+
+        // Extract memory components
+        const {context, preferences, summary, recentMessages, patterns} = memoryData;
 
         // Handle CLARIFY case
         if (agent === 'CLARIFY') {
@@ -520,7 +1265,7 @@ class CentralizedAgent {
 
         // Handle GENERAL case with LLM
         if (agent === 'GENERAL') {
-            const generalResponse = await this.handleGeneralWithLLM(message, context, userPatterns, profile);
+            const generalResponse = await this.handleGeneralWithLLM(message, memoryData, userId);
             return {
                 agent: 'Student Mate',
                 text: generalResponse
@@ -530,7 +1275,7 @@ class CentralizedAgent {
         // Get the sub-agent
         const subAgent = this.subAgents[agent];
         if (!subAgent) {
-            const generalResponse = await this.handleGeneralWithLLM(message, context, userPatterns, profile);
+            const generalResponse = await this.handleGeneralWithLLM(message, memoryData, userId);
             return {
                 agent: 'Student Mate',
                 text: generalResponse
@@ -538,7 +1283,18 @@ class CentralizedAgent {
         }
 
         try {
-            const responseText = await subAgent.agent.handle(message, context, userPatterns, profile);
+            // Pass both legacy and new format to agent
+            const agentResponse = await subAgent.agent.handle(message, context, patterns || userPatterns, profile);
+
+            // 🔄 CHECK FOR AGENT HANDOFF REQUEST
+            // Agents can return {text, handoff} to request routing to another agent
+            if (typeof agentResponse === 'object' && agentResponse.handoff) {
+                logger.info(`Agent ${agent} requested handoff to ${agentResponse.handoff}`);
+                return await this.handleAgentHandoff(agentResponse, message, memoryData, userId);
+            }
+
+            const responseText = typeof agentResponse === 'string' ? agentResponse : agentResponse.text;
+
             return {
                 agent: subAgent.name,
                 text: responseText,
@@ -549,6 +1305,51 @@ class CentralizedAgent {
             return {
                 agent: subAgent.name,
                 text: "I apologize, I encountered an issue. Could you please try rephrasing your question? 😊"
+            };
+        }
+    }
+
+    /**
+     * 🔄 Handle agent handoff request
+     * When an agent detects the conversation should be handled by another agent
+     */
+    async handleAgentHandoff(handoffRequest, message, memoryData, userId) {
+        const {handoff, reason, text} = handoffRequest;
+
+        logger.info(`Processing handoff to ${handoff}: ${reason}`);
+
+        // Update the active session to the new agent
+        this.updateActiveSession(userId, handoff);
+
+        // Get the new agent
+        const newAgent = this.subAgents[handoff];
+        if (!newAgent) {
+            // If handoff target doesn't exist, return the original response
+            return {
+                agent: 'Student Mate',
+                text: text || handoffRequest
+            };
+        }
+
+        // If the original agent provided a transition message, include it
+        const transitionMsg = text ? text + '\n\n' : '';
+
+        try {
+            // Route to the new agent
+            const {context, patterns, profile} = memoryData;
+            const newResponse = await newAgent.agent.handle(message, context, patterns, profile);
+            const newResponseText = typeof newResponse === 'string' ? newResponse : newResponse.text;
+
+            return {
+                agent: newAgent.name,
+                text: transitionMsg + newResponseText,
+                handoff: {from: handoffRequest.from, to: handoff, reason}
+            };
+        } catch (error) {
+            logger.error(`Handoff failed to ${handoff}`, error);
+            return {
+                agent: 'Student Mate',
+                text: text || "I'm here to help. What would you like to talk about?"
             };
         }
     }
@@ -575,14 +1376,13 @@ Just let me know what you need most right now!`
     }
 
     /**
-     * Handle GENERAL messages with LLM
+     * Handle GENERAL messages with LLM - Using Prompt Assembler
      */
-    async handleGeneralWithLLM(message, context, userPatterns, profile) {
-        const personaPrompt = getStudentMatePersona(profile, context, '💬 General Companion & Chat');
-        const tonePrompt = getAdaptiveTone(userPatterns);
-        const continuityPrompt = getContinuityPrompt();
+    async handleGeneralWithLLM(message, memoryData, userId) {
+        const {profile, preferences, summary, recentMessages, patterns} = memoryData;
 
-        const systemPrompt = personaPrompt + `
+        // Build the agent-specific system prompt
+        const agentPrompt = getStudentMatePersona(profile, memoryData.context, '💬 General Companion & Chat') + `
 ╔═══════════════════════════════════════════════════════════╗
 ║              GENERAL CONVERSATION MODE                    ║
 ╚═══════════════════════════════════════════════════════════╝
@@ -605,12 +1405,24 @@ WHAT YOU CAN HELP WITH:
 🔍 Finding knowledge gaps
 
 Be yourself - Student Mate, their friendly AI companion! 😊
-` + tonePrompt + continuityPrompt;
+` + getAdaptiveTone(patterns) + getContinuityPrompt();
 
-        const response = await callLLM(systemPrompt, `Student says: ${message}`, {
-            maxTokens: 300,
-            temperature: 0.8
+        // Assemble the complete prompt using Prompt Assembler
+        const assembled = promptAssembler.assemble({
+            agentSystemPrompt: agentPrompt,
+            profile: profile || {},
+            preferences: preferences || {},
+            summary: summary || '',
+            recentMessages: recentMessages || [],
+            currentMessage: message,
+            patterns: patterns || {}
         });
+
+        const response = await callLLM(assembled.systemPrompt, `Student says: ${message}`, {
+            maxTokens: 300,
+            temperature: 0.8,
+            taskType: 'conversation'  // Use main model for general conversation
+        }, assembled.messages);
 
         if (response) {
             return response;

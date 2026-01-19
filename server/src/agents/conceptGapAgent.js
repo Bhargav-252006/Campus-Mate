@@ -105,7 +105,8 @@ class ConceptGapAgent {
             userPrompt,
             {
                 maxTokens: this.config.maxTokens,
-                temperature: this.config.temperature
+                temperature: this.config.temperature,
+                taskType: 'teaching'  // Use main model for gap identification
             }
         );
 

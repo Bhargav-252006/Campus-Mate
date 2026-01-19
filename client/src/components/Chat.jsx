@@ -8,13 +8,48 @@ const Chat = () => {
     const [inputText, setInputText] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isListening, setIsListening] = useState(false);
-    const [isSpeaking, setIsSpeaking] = useState(true);
+    const [isSpeaking, setIsSpeaking] = useState(false); // Disabled by default - only speaks for voice input
+    const [voiceInputUsed, setVoiceInputUsed] = useState(false); // Track if last input was voice
+    const [isCurrentlySpeaking, setIsCurrentlySpeaking] = useState(false);
+    const [availableVoices, setAvailableVoices] = useState([]);
+    const [selectedVoice, setSelectedVoice] = useState(null);
     const [recognition, setRecognition] = useState(null);
+    const [userId, setUserId] = useState(null);
     const messagesEndRef = useRef(null);
 
+    // Generate or retrieve userId for this device/browser
+    const getUserId = () => {
+        let storedUserId = localStorage.getItem('student_mate_userId');
+        if (!storedUserId) {
+            // Generate unique ID: timestamp + random string
+            storedUserId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            localStorage.setItem('student_mate_userId', storedUserId);
+            console.log('New user ID generated:', storedUserId);
+        }
+        return storedUserId;
+    };
+
     useEffect(() => {
+        // Get or generate userId
+        const id = getUserId();
+        setUserId(id);
+
         // Load chat history
-        loadChatHistory();
+        loadChatHistory(id);
+
+        // Load available voices
+        const loadVoices = () => {
+            const voices = window.speechSynthesis.getVoices();
+            setAvailableVoices(voices);
+            // Set default to first female voice or first voice
+            const femaleVoice = voices.find(v => v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('zira') || v.name.toLowerCase().includes('samantha'));
+            setSelectedVoice(femaleVoice || voices[0]);
+        };
+
+        loadVoices();
+        if (window.speechSynthesis.onvoiceschanged !== undefined) {
+            window.speechSynthesis.onvoiceschanged = loadVoices;
+        }
 
         // Setup speech recognition
         if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
@@ -28,8 +63,7 @@ const Chat = () => {
                 const transcript = event.results[0][0].transcript;
                 setInputText(transcript);
                 setIsListening(false);
-                // Auto-send after voice input
-                setTimeout(() => handleSend(transcript), 100);
+                setVoiceInputUsed(true); // Mark that voice input was used
             };
 
             recognitionInstance.onerror = () => setIsListening(false);
@@ -47,9 +81,9 @@ const Chat = () => {
         scrollToBottom();
     }, [messages]);
 
-    const loadChatHistory = async () => {
+    const loadChatHistory = async (id) => {
         try {
-            const history = await getChatHistory();
+            const history = await getChatHistory(id || userId);
             if (history.length > 0) {
                 setMessages(history);
             } else {
@@ -57,8 +91,8 @@ const Chat = () => {
                 setMessages([{
                     id: 'welcome',
                     sender: 'bot',
-                    agent: 'Student Mate',
-                    text: "Hello! 👋 I'm your Student Mate AI assistant. I can help you with:\n\n• 📚 Academic questions & explanations\n• 😊 Emotional support & motivation\n• 🧠 Cognitive load management\n• 📊 Study strategies & failure patterns\n\nHow can I help you today?",
+                    agent: 'Campus Mate',
+                    text: "Hello! 👋 I'm your Campus Mate assistant. I can help you with:\n\n• 📚 Academic questions & explanations\n• 😊 Emotional support & motivation\n• 🧠 Cognitive load management\n• 📊 Study strategies & failure patterns\n\nHow can I help you today?",
                     timestamp: new Date().toISOString()
                 }]);
             }
@@ -72,7 +106,17 @@ const Chat = () => {
     };
 
     const handleSend = async (text = inputText) => {
-        if (!text.trim() || isLoading) return;
+        if (!text.trim() || isLoading || !userId) return;
+
+        // Stop any ongoing speech
+        if (window.speechSynthesis) {
+            window.speechSynthesis.cancel();
+            setIsCurrentlySpeaking(false);
+        }
+
+        // Remember if this was a voice input
+        const wasVoiceInput = voiceInputUsed;
+        setVoiceInputUsed(false); // Reset for next input
 
         const userMessage = {
             id: Date.now(),
@@ -86,7 +130,7 @@ const Chat = () => {
         setIsLoading(true);
 
         try {
-            const response = await sendMessageToAgent(text.trim());
+            const response = await sendMessageToAgent(text.trim(), userId);
 
             const botMessage = {
                 id: Date.now() + 1,
@@ -98,8 +142,8 @@ const Chat = () => {
 
             setMessages(prev => [...prev, botMessage]);
 
-            // Speak response if enabled
-            if (isSpeaking) {
+            // Auto-speak only if: (voice input was used) OR (user manually enabled speaking)
+            if (wasVoiceInput || isSpeaking) {
                 speakText(response.response);
             }
         } catch (error) {
@@ -119,10 +163,26 @@ const Chat = () => {
     const speakText = (text) => {
         if ('speechSynthesis' in window) {
             window.speechSynthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.rate = 1;
-            utterance.pitch = 1;
+            // Remove emojis from text before speaking
+            const textWithoutEmojis = text.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{1F900}-\u{1F9FF}]|[\u{1FA00}-\u{1FA6F}]|[\u{1FA70}-\u{1FAFF}]|[\u{FE00}-\u{FE0F}]|[\u{2300}-\u{23FF}]|[\u{2B50}]|[\u{203C}]|[\u{2049}]|[\u{25AA}]|[\u{25AB}]|[\u{25B6}]|[\u{25C0}]|[\u{25FB}-\u{25FE}]|[\u{00A9}]|[\u{00AE}]|[\u{2122}]|[\u{2139}]|[\u{1F004}]|[\u{1F0CF}]|[\u{1F170}-\u{1F171}]|[\u{1F17E}-\u{1F17F}]|[\u{1F18E}]|[\u{3030}]|[\u{303D}]|[\u{3297}]|[\u{3299}]|[\u{1F201}-\u{1F202}]|[\u{1F21A}]|[\u{1F22F}]|[\u{1F232}-\u{1F23A}]|[\u{1F250}-\u{1F251}]|[\u{1F300}-\u{1F5FF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{1F700}-\u{1F77F}]|[\u{1F780}-\u{1F7FF}]|[\u{1F800}-\u{1F8FF}]|[\u{1F900}-\u{1F9FF}]|[\u{1FA00}-\u{1FA6F}]|[\u{1FA70}-\u{1FAFF}]/gu, '').trim();
+            const utterance = new SpeechSynthesisUtterance(textWithoutEmojis);
+
+            if (selectedVoice) {
+                utterance.voice = selectedVoice;
+            }
+
+            utterance.onstart = () => setIsCurrentlySpeaking(true);
+            utterance.onend = () => setIsCurrentlySpeaking(false);
+            utterance.onerror = () => setIsCurrentlySpeaking(false);
+
             window.speechSynthesis.speak(utterance);
+        }
+    };
+
+    const stopSpeaking = () => {
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+            setIsCurrentlySpeaking(false);
         }
     };
 
@@ -144,7 +204,7 @@ const Chat = () => {
                 setMessages([{
                     id: 'welcome',
                     sender: 'bot',
-                    agent: 'Student Mate',
+                    agent: 'Campus Mate',
                     text: "Chat cleared! How can I help you?",
                     timestamp: new Date().toISOString()
                 }]);
@@ -155,7 +215,10 @@ const Chat = () => {
     };
 
     const formatTime = (timestamp) => {
-        return new Date(timestamp).toLocaleTimeString('en-US', {
+        if (!timestamp) return '';
+        const date = new Date(timestamp);
+        if (isNaN(date.getTime())) return '';
+        return date.toLocaleTimeString('en-US', {
             hour: '2-digit',
             minute: '2-digit'
         });
@@ -169,10 +232,10 @@ const Chat = () => {
             'Persona Switch Agent': '#8b5cf6',
             'Failure Pattern Agent': '#ef4444',
             'Concept Gap Agent': '#10b981',
-            'General Assistant': '#6b7280',
-            'Student Mate': '#6366f1'
+            'General Assistant': '#64748b',
+            'Campus Mate': '#3b82f6'
         };
-        return colors[agent] || '#6b7280';
+        return colors[agent] || '#64748b';
     };
 
     return (
@@ -189,10 +252,19 @@ const Chat = () => {
                     <button
                         className={`icon-btn ${isSpeaking ? 'active' : ''}`}
                         onClick={() => setIsSpeaking(!isSpeaking)}
-                        title={isSpeaking ? 'Mute responses' : 'Enable voice'}
+                        title={isSpeaking ? 'Voice mode: Always ON' : 'Voice mode: Auto (speaks for voice input only)'}
                     >
                         {isSpeaking ? <Volume2 size={20} /> : <VolumeX size={20} />}
                     </button>
+                    {isCurrentlySpeaking && (
+                        <button
+                            className="icon-btn warning"
+                            onClick={stopSpeaking}
+                            title="Stop speaking"
+                        >
+                            <VolumeX size={20} />
+                        </button>
+                    )}
                     <button
                         className="icon-btn danger"
                         onClick={handleClearChat}
@@ -260,7 +332,7 @@ const Chat = () => {
                     </button>
                 </div>
                 <p className="chat-hint">
-                    Try: "I'm stressed about exams" • "Explain neural networks" • "Help me prioritize"
+                    🎤 Voice replies auto-play when using mic • Toggle speaker for always-on voice "
                 </p>
             </div>
         </div>

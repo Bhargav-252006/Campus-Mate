@@ -1,0 +1,152 @@
+Student Mate AI — PPT Slide Content (copy/paste)
+Date: Jan 18, 2026
+
+SLIDE 1 — Title
+Title: Student Mate AI (Campus Mate) — Multi‑Agent LLM Study Companion
+Subtitle: React + Vite | Node.js + Express | OpenRouter Multi‑Model Routing | Persistent Memory v3
+
+Speaker notes:
+- Goal: student productivity + learning help + emotional support with memory and routing.
+
+
+SLIDE 2 — Problem & Goal
+Title: Problem Statement & Goal
+Bullets:
+- Students juggle deadlines, exams, schedules, and learning gaps
+- Generic chatbots lack personalization, continuity, and task specialization
+- Goal: a voice-enabled (optional), multi-agent assistant that remembers context and adapts responses
+
+
+SLIDE 3 — High-Level Architecture
+Title: System Architecture (Frontend ↔ Backend)
+Bullets:
+- Frontend: React + Vite modules (Dashboard, Timetable, Exams, Schedule, Notes, Mood, Deadlines, Analytics, Flashcards, Habits, Grades, Resources, Chat)
+- Backend: Express REST API + Central Agent Router + Multi-Model LLM Service + Memory Manager v3
+- Storage: JSON persistence (server/data/*.json) + localStorage for client features
+
+Diagram (paste as image or keep as ASCII):
+[User]
+  ↓
+[React UI] → (REST /api/*) → [Express API]
+                        → [Agent Router] → [Prompt Assembler + Memory] → [LLM Service (OpenRouter)]
+                        ←──────────────────────────── response ───────────────────────────────
+
+
+SLIDE 4 — Frontend Contents (What’s Implemented)
+Title: Frontend Modules & UI Architecture
+Bullets:
+- Pages/Modules: Dashboard, Timetable, Exams, Daily Schedule, Notes, Mood Tracker, Deadlines, Analytics
+- Learning tools: Flashcards (spaced repetition), Habit Tracker (streaks), Grade Calculator (GPA), Resource Library (folders/tags)
+- UI infrastructure: Layout sidebar navigation, Theme toggle (dark/light), Toast notifications, import/export backup
+- Persistence: localStorage for study utilities + preferences
+
+
+SLIDE 5 — Backend Contents (What’s Implemented)
+Title: Backend Architecture & Responsibilities
+Bullets:
+- Express API routes under /api (chat, timetable, exams, schedule, profile, memory export)
+- Centralized agent routing (intent → agent selection → response)
+- Tool execution layer (structured actions when needed)
+- LLM service: OpenRouter calls + task-based model selection
+- Persistent memory: MemoryManagerV3 (tiered memory, summarization, importance scoring)
+
+
+SLIDE 6 — Request Flow (End-to-End)
+Title: End-to-End Request Flow
+Bullets:
+1) User message from UI → POST /api/chat
+2) Backend: session context check + routing/classification
+3) Agent selected (Academic / Emotional / Cognitive Load / Persona / Failure / Concept Gap)
+4) Memory retrieval + prompt assembly
+5) LLM model selected (multi-model routing) → OpenRouter API call
+6) Response returned to UI + memory updated (debounced persistence)
+
+
+SLIDE 7 — Agent System (Multi-Agent Architecture)
+Title: Multi-Agent System (MAS)
+Bullets:
+- Academic Agent: explanations, solving, study help
+- Emotional Support Agent: stress/anxiety support
+- Cognitive Load Agent: prioritization, planning, overwhelm management
+- Persona Switch Agent: adapts tone (friend/teacher/mentor)
+- Failure Pattern Agent: detects mistakes, recommends improvement
+- Concept Gap Agent: finds missing prerequisites, fills gaps
+
+Speaker notes:
+- Benefit: specialization improves quality and consistency.
+
+
+SLIDE 8 — LLM / Agent Classification Layers (Routing Pipeline)
+Title: LLM Classification Layers (4-Layer Router)
+Bullets:
+- Layer 0: Session Context Check (active agent lock for continuity)
+- Layer 1: Topic Change Detection (re-route only when needed)
+- Layer 2: Rule-Based Routing (keyword mapping for fast decisions)
+- Layer 3: LLM-Based Classification (smart fallback with confidence)
+- Layer 4: Confidence Check (ask clarifying question if uncertain)
+
+Speaker notes:
+- Benefits: faster, cheaper, fewer wrong routes, better continuity.
+
+
+SLIDE 9 — Multi-Model Routing (OpenRouter)
+Title: Multi-Model Routing (Task-Based Model Selection)
+Bullets:
+- Classification/routing: fast routing model (e.g., Trinity Mini)
+- Teaching + general chat: high quality main model (e.g., Qwen 80B)
+- Summarization/memory compression: fast summarizer (e.g., MiMo Flash)
+- Tool/structured output: JSON/code friendly model (e.g., Devstral)
+- Research/factual: knowledge model (e.g., Nemotron)
+- Creative/persona: creative model (e.g., Chimera)
+
+Speaker notes:
+- Why: optimize latency + quality + cost using the best model per task.
+
+
+SLIDE 10 — Memory System (MemoryManagerV3)
+Title: Memory Classifications (Tiered Memory)
+Bullets:
+- Working Memory: immediate context (last ~5 messages)
+- Short-Term Memory: recent context (last ~20 messages)
+- Episodic Memory: LLM-generated conversation summaries
+- Semantic Memory: extracted stable facts/preferences
+- Profile Memory: user identity + long-term preferences
+
+Extra features to mention:
+- Debounced disk writes (saves every few seconds)
+- Importance scoring (retain high-value memories)
+- Semantic similarity retrieval (bring relevant memories into prompts)
+- Memory decay (older/less useful details fade)
+- Token budgeting (caps each tier’s prompt share)
+
+
+SLIDE 11 — Data & Persistence
+Title: Data Storage Strategy
+Bullets:
+- Server persistence: JSON files (memory, profiles, preferences, chat history)
+- Client persistence: localStorage (habits, flashcards, grades, resources, theme)
+- Import/Export: backup file download + restore via upload
+
+Speaker notes:
+- This enables durability without a DB; can migrate to Mongo/Postgres later.
+
+
+SLIDE 12 — Strengths & Future Work
+Title: Strengths & Future Improvements
+Bullets:
+- Strengths: multi-agent specialization, layered routing, multi-model optimization, tiered memory
+- Future: database migration, auth/user accounts, cloud sync, analytics dashboards, websocket/live updates
+
+
+OPTIONAL: 1-slide architecture diagram for drawing
+Title: One-Page Diagram (for PPT)
+Boxes:
+- React UI
+- Express API
+- Agent Router
+- Prompt Assembler
+- Memory Manager v3
+- LLM Service (OpenRouter)
+- Storage (JSON + localStorage)
+Arrows:
+- UI → API → Router → (Memory + LLM) → Router → API → UI

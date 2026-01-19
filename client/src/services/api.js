@@ -8,29 +8,29 @@ const api = axios.create({
     headers: {'Content-Type': 'application/json'}
 });
 
-// User ID (in real app, get from auth)
-const getUserId = () => 'user-123';
+// User ID - now accepts parameter instead of hardcoded
+const getUserId = (id) => id || 'user-123';
 
 // ============ CHAT ============
-export const sendMessageToAgent = async (message) => {
+export const sendMessageToAgent = async (message, userId) => {
     const response = await api.post('/chat', {
         message,
-        userId: getUserId()
+        userId: getUserId(userId)
     });
     return response.data;
 };
 
-export const getChatHistory = async () => {
+export const getChatHistory = async (userId) => {
     try {
-        const response = await api.get(`/chat/history?userId=${getUserId()}`);
+        const response = await api.get(`/chat/history?userId=${getUserId(userId)}`);
         return response.data;
     } catch {
         return [];
     }
 };
 
-export const clearChatHistory = async () => {
-    await api.delete(`/chat/history?userId=${getUserId()}`);
+export const clearChatHistory = async (userId) => {
+    await api.delete(`/chat/history?userId=${getUserId(userId)}`);
 };
 
 // ============ TIMETABLE ============
@@ -103,4 +103,107 @@ export const updateTask = async (id, task) => {
 
 export const deleteTask = async (id) => {
     await api.delete(`/schedule/${id}?userId=${getUserId()}`);
+};
+
+// ============ TOOLS API ============
+
+// Helper to call tools via chat
+const callTool = async (message) => {
+    const response = await api.post('/chat', {
+        message,
+        userId: getUserId()
+    });
+    return response.data;
+};
+
+// 🍅 POMODORO
+export const startPomodoro = async (subject, duration = 25) => {
+    return callTool(`Start a pomodoro for ${subject} for ${duration} minutes`);
+};
+
+export const endPomodoro = async () => {
+    return callTool('End pomodoro');
+};
+
+export const getPomodoroStats = async (period = 'week') => {
+    return callTool(`Show my pomodoro stats for this ${period}`);
+};
+
+// 🧠 MOOD
+export const logMood = async (mood, energy, notes = '') => {
+    return callTool(`I'm feeling ${mood}, energy level ${energy}. ${notes}`);
+};
+
+export const getMoodHistory = async () => {
+    return callTool('Show my mood history');
+};
+
+export const getMoodTrends = async () => {
+    return callTool('Show my mood trends and patterns');
+};
+
+// 📅 DEADLINES
+export const addDeadline = async (title, dueDate, subject, priority = 'medium') => {
+    return callTool(`Add deadline: ${title} for ${subject} due on ${dueDate}, priority ${priority}`);
+};
+
+export const getDeadlines = async () => {
+    return callTool('Show my deadlines');
+};
+
+export const getUpcomingDeadlines = async () => {
+    return callTool("What's due this week?");
+};
+
+export const markDeadlineComplete = async (title) => {
+    return callTool(`Mark ${title} deadline as complete`);
+};
+
+// 📝 NOTES
+export const saveNote = async (content) => {
+    return callTool(`Save note: ${content}`);
+};
+
+export const getNotes = async () => {
+    return callTool('Show my notes');
+};
+
+export const searchNotes = async (query) => {
+    return callTool(`Search my notes for ${query}`);
+};
+
+// 📝 QUIZ
+export const generateQuiz = async (topic, numQuestions = 5) => {
+    return callTool(`Quiz me on ${topic} with ${numQuestions} questions`);
+};
+
+// 🔍 SEARCH
+export const searchWeb = async (query) => {
+    return callTool(`Search for ${query}`);
+};
+
+export const searchWikipedia = async (topic) => {
+    return callTool(`What is ${topic}?`);
+};
+
+export const searchYoutube = async (query) => {
+    return callTool(`Find YouTube videos about ${query}`);
+};
+
+// 📚 STUDY PLANS
+export const createStudyPlan = async (subject) => {
+    return callTool(`Create a study plan for ${subject}`);
+};
+
+export const getTodaysTasks = async () => {
+    return callTool("What should I do today?");
+};
+
+// ⏰ REMINDERS
+export const setReminder = async (title, datetime) => {
+    return callTool(`Remind me to ${title} at ${datetime}`);
+};
+
+export const getReminders = async () => {
+    return callTool('Show my reminders');
 };

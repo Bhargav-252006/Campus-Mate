@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const centralizedAgent = require('../agents/agentRouter');
 const {timetableStore, examsStore, scheduleStore, chatHistoryStore} = require('../utils/dataStore');
-const memoryManager = require('../utils/memoryManager');
+const memoryManager = require('../utils/memoryManagerV3');  // V3: Debounced, tiered memory
 const {getFreeModels} = require('../utils/llmService');
 const logger = require('../utils/logger');
 
@@ -79,7 +79,12 @@ router.get('/profile', (req, res) => {
     try {
         const userId = req.query.userId || 'user-123';
         const profile = memoryManager.getProfile(userId);
-        res.json(profile || {message: 'No profile yet. Start chatting!'});
+        const isNewUser = !profile.name && profile.subjects?.length === 0;
+        res.json({
+            ...profile,
+            isNewUser,
+            message: isNewUser ? 'No profile yet. Start chatting!' : null
+        });
     } catch (error) {
         logger.error('Get profile error', error);
         res.status(500).json({error: "Internal Server Error"});
@@ -90,10 +95,12 @@ router.get('/profile', (req, res) => {
 router.put('/profile', (req, res) => {
     try {
         const {userId, ...updates} = req.body;
-        memoryManager.updateUserProfile(userId || 'user-123', updates);
+        const actualUserId = userId || 'user-123';
+        memoryManager.updateProfile(actualUserId, updates);
+        logger.info(`Profile updated for ${actualUserId}`);
         res.json({success: true, message: 'Profile updated!'});
     } catch (error) {
-        console.error("Error updating profile:", error);
+        logger.error('Error updating profile', error);
         res.status(500).json({error: "Internal Server Error"});
     }
 });
@@ -114,10 +121,11 @@ router.get('/memory/export', (req, res) => {
 router.delete('/memory/conversations', (req, res) => {
     try {
         const userId = req.query.userId || 'user-123';
-        memoryManager.clearMemory(userId);
+        memoryManager.clearConversation(userId);
+        logger.info(`Conversations cleared for ${userId}`);
         res.json({success: true, message: 'Conversations cleared, profile kept!'});
     } catch (error) {
-        console.error("Error clearing memory:", error);
+        logger.error('Error clearing memory', error);
         res.status(500).json({error: "Internal Server Error"});
     }
 });
@@ -126,10 +134,11 @@ router.delete('/memory/conversations', (req, res) => {
 router.delete('/memory/all', (req, res) => {
     try {
         const userId = req.query.userId || 'user-123';
-        memoryManager.clearAllData(userId);
+        memoryManager.clearAll(userId);
+        logger.info(`All data cleared for ${userId}`);
         res.json({success: true, message: 'All data cleared!'});
     } catch (error) {
-        console.error("Error clearing all data:", error);
+        logger.error('Error clearing all data', error);
         res.status(500).json({error: "Internal Server Error"});
     }
 });

@@ -105,7 +105,8 @@ class EmotionalSupportAgent {
             userPrompt,
             {
                 maxTokens: this.config.maxTokens,
-                temperature: this.config.temperature
+                temperature: this.config.temperature,
+                taskType: 'empathy'  // Use main model for empathetic responses
             }
         );
 

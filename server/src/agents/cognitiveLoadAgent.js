@@ -83,7 +83,8 @@ class CognitiveLoadAgent {
             userPrompt,
             {
                 maxTokens: this.config.maxTokens,
-                temperature: this.config.temperature
+                temperature: this.config.temperature,
+                taskType: 'analysis'  // Use main model for cognitive analysis
             }
         );
 
