@@ -1,8 +1,8 @@
-import React, {useState, useEffect} from 'react';
-import {Plus, Edit2, Trash2, X, Save, ExternalLink, AlertTriangle} from 'lucide-react';
-import {getExams, addExam, updateExam, deleteExam} from '../services/api';
+import React, { useState, useEffect } from 'react';
+import { Plus, Edit2, Trash2, X, Save, ExternalLink, AlertTriangle } from 'lucide-react';
+import { getExams, addExam, updateExam, deleteExam } from '../services/api';
 
-const emptyExam = {course: '', date: '', time: '', location: '', syllabusLink: '', notes: ''};
+const emptyExam = { course: '', date: '', time: '', location: '', syllabusLink: '', notes: '' };
 
 const Exams = () => {
     const [exams, setExams] = useState([]);
@@ -205,7 +205,7 @@ const Exams = () => {
                                 <input
                                     type="text"
                                     value={formData.course}
-                                    onChange={e => setFormData({...formData, course: e.target.value})}
+                                    onChange={e => setFormData({ ...formData, course: e.target.value })}
                                     required
                                     placeholder="e.g., Data Structures"
                                 />
@@ -216,7 +216,7 @@ const Exams = () => {
                                     <input
                                         type="date"
                                         value={formData.date}
-                                        onChange={e => setFormData({...formData, date: e.target.value})}
+                                        onChange={e => setFormData({ ...formData, date: e.target.value })}
                                         required
                                     />
                                 </div>
@@ -225,7 +225,7 @@ const Exams = () => {
                                     <input
                                         type="time"
                                         value={formData.time}
-                                        onChange={e => setFormData({...formData, time: e.target.value})}
+                                        onChange={e => setFormData({ ...formData, time: e.target.value })}
                                     />
                                 </div>
                             </div>
@@ -234,7 +234,7 @@ const Exams = () => {
                                 <input
                                     type="text"
                                     value={formData.location}
-                                    onChange={e => setFormData({...formData, location: e.target.value})}
+                                    onChange={e => setFormData({ ...formData, location: e.target.value })}
                                     placeholder="e.g., Hall A"
                                 />
                             </div>
@@ -243,7 +243,7 @@ const Exams = () => {
                                 <input
                                     type="url"
                                     value={formData.syllabusLink}
-                                    onChange={e => setFormData({...formData, syllabusLink: e.target.value})}
+                                    onChange={e => setFormData({ ...formData, syllabusLink: e.target.value })}
                                     placeholder="https://..."
                                 />
                             </div>
@@ -251,7 +251,7 @@ const Exams = () => {
                                 <label>Notes</label>
                                 <textarea
                                     value={formData.notes}
-                                    onChange={e => setFormData({...formData, notes: e.target.value})}
+                                    onChange={e => setFormData({ ...formData, notes: e.target.value })}
                                     placeholder="Any additional notes..."
                                     rows={3}
                                 />

@@ -914,7 +914,7 @@ class CentralizedAgent {
 
             if (responseText) {
                 return {
-                    agent: 'Student Mate',
+                    agent: 'Campus Mate',
                     text: responseText,
                     tool: tool,
                     toolResult: result
@@ -1257,7 +1257,7 @@ class CentralizedAgent {
         // Handle CLARIFY case
         if (agent === 'CLARIFY') {
             return {
-                agent: 'Student Mate',
+                agent: 'Campus Mate',
                 text: this.getClarifyingQuestion(message, classification.suggestedAgent),
                 needsClarification: true
             };
@@ -1267,7 +1267,7 @@ class CentralizedAgent {
         if (agent === 'GENERAL') {
             const generalResponse = await this.handleGeneralWithLLM(message, memoryData, userId);
             return {
-                agent: 'Student Mate',
+                agent: 'Campus Mate',
                 text: generalResponse
             };
         }
@@ -1277,7 +1277,7 @@ class CentralizedAgent {
         if (!subAgent) {
             const generalResponse = await this.handleGeneralWithLLM(message, memoryData, userId);
             return {
-                agent: 'Student Mate',
+                agent: 'Campus Mate',
                 text: generalResponse
             };
         }
@@ -1326,7 +1326,7 @@ class CentralizedAgent {
         if (!newAgent) {
             // If handoff target doesn't exist, return the original response
             return {
-                agent: 'Student Mate',
+                agent: 'Campus Mate',
                 text: text || handoffRequest
             };
         }
@@ -1348,7 +1348,7 @@ class CentralizedAgent {
         } catch (error) {
             logger.error(`Handoff failed to ${handoff}`, error);
             return {
-                agent: 'Student Mate',
+                agent: 'Campus Mate',
                 text: text || "I'm here to help. What would you like to talk about?"
             };
         }
@@ -1404,7 +1404,7 @@ WHAT YOU CAN HELP WITH:
 🎯 Learning from mistakes
 🔍 Finding knowledge gaps
 
-Be yourself - Student Mate, their friendly AI companion! 😊
+Be yourself - Campus Mate, their friendly AI companion! 😊
 ` + getAdaptiveTone(patterns) + getContinuityPrompt();
 
         // Assemble the complete prompt using Prompt Assembler

@@ -3,7 +3,7 @@ const {getStudentMatePersona, getAdaptiveTone, getContinuityPrompt} = require('.
 
 /**
  * ACADEMIC AGENT - Specialized for Educational Content
- * Uses unified Student Mate persona for consistent, friendly communication
+ * Uses unified Campus Mate persona for consistent, friendly communication
  */
 
 const AGENT_CONFIG = {
@@ -32,7 +32,7 @@ YOUR ACADEMIC FOCUS:
 ✓ Homework and assignment help
 ✓ Making complex topics simple and fun
 
-TEACHING APPROACH (as Student Mate):
+TEACHING APPROACH (as Campus Mate):
 1. Greet warmly if it's a new topic
 2. Start with a simple, clear explanation
 3. Use relatable analogies (Netflix, food, games, etc.)
@@ -74,7 +74,7 @@ class AcademicAgent {
     async handle(message, context = '', userPatterns = {}, profile = {}) {
         console.log(`[${this.config.name}] Processing academic query...`);
 
-        // Build unified Student Mate persona + agent specialization
+        // Build unified Campus Mate persona + agent specialization
         const personaPrompt = getStudentMatePersona(profile, context, this.config.specialization);
         const tonePrompt = getAdaptiveTone(userPatterns);
         const continuityPrompt = getContinuityPrompt();

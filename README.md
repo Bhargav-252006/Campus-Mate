@@ -1,4 +1,4 @@
-# Student Mate AI 🎓
+# Campus Mate 🎓
 
 A **voice-enabled, multi-agent AI companion** for students that **REMEMBERS EVERYTHING** about you!
 
@@ -23,7 +23,7 @@ Built with React + Vite frontend and Node.js + Express backend with **OpenRouter
 
 ## 🧠 Persistent Memory
 
-Your Student Mate **never forgets**:
+Your Campus Mate **never forgets**:
 - ✅ Your name and preferences
 - ✅ Subjects you're studying
 - ✅ Your goals and aspirations

@@ -1,7 +1,7 @@
 {
     "name": "student-mate-server",
     "version": "1.0.0",
-    "description": "Backend for Student Mate AI",
+    "description": "Backend for Campus Mate",
     "main": "src/app.js",
     "scripts": {
         "start": "node src/app.js",

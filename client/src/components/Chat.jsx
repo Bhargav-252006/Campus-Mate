@@ -1,6 +1,6 @@
-import React, {useState, useEffect, useRef} from 'react';
-import {Send, Mic, MicOff, Volume2, VolumeX, Trash2, Bot} from 'lucide-react';
-import {sendMessageToAgent, getChatHistory, clearChatHistory} from '../services/api';
+import React, { useState, useEffect, useRef } from 'react';
+import { Send, Mic, MicOff, Volume2, VolumeX, Trash2, Bot } from 'lucide-react';
+import { sendMessageToAgent, getChatHistory, clearChatHistory } from '../services/api';
 import ReactMarkdown from 'react-markdown';
 
 const Chat = () => {
@@ -102,7 +102,7 @@ const Chat = () => {
     };
 
     const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({behavior: 'smooth'});
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
 
     const handleSend = async (text = inputText) => {

@@ -1,6 +1,6 @@
-import React, {useState, useEffect} from 'react';
-import {Plus, Edit2, Trash2, X, Save} from 'lucide-react';
-import {getTimetable, addTimetableEntry, updateTimetableEntry, deleteTimetableEntry} from '../services/api';
+import React, { useState, useEffect } from 'react';
+import { Plus, Edit2, Trash2, X, Save } from 'lucide-react';
+import { getTimetable, addTimetableEntry, updateTimetableEntry, deleteTimetableEntry } from '../services/api';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const TIME_SLOTS = [
@@ -8,7 +8,7 @@ const TIME_SLOTS = [
     '01:00 PM', '02:00 PM', '03:00 PM', '04:00 PM', '05:00 PM'
 ];
 
-const emptyEntry = {subject: '', day: 'Monday', time: '09:00 AM', room: '', teacher: ''};
+const emptyEntry = { subject: '', day: 'Monday', time: '09:00 AM', room: '', teacher: '' };
 
 const Timetable = () => {
     const [timetable, setTimetable] = useState([]);
@@ -131,7 +131,7 @@ const Timetable = () => {
                                                 <button
                                                     className="add-class-btn"
                                                     onClick={() => {
-                                                        setFormData({...emptyEntry, day, time});
+                                                        setFormData({ ...emptyEntry, day, time });
                                                         setShowModal(true);
                                                     }}
                                                 >
@@ -163,7 +163,7 @@ const Timetable = () => {
                                 <input
                                     type="text"
                                     value={formData.subject}
-                                    onChange={e => setFormData({...formData, subject: e.target.value})}
+                                    onChange={e => setFormData({ ...formData, subject: e.target.value })}
                                     required
                                     placeholder="e.g., Mathematics"
                                 />
@@ -173,7 +173,7 @@ const Timetable = () => {
                                     <label>Day *</label>
                                     <select
                                         value={formData.day}
-                                        onChange={e => setFormData({...formData, day: e.target.value})}
+                                        onChange={e => setFormData({ ...formData, day: e.target.value })}
                                     >
                                         {DAYS.map(day => <option key={day} value={day}>{day}</option>)}
                                     </select>
@@ -182,7 +182,7 @@ const Timetable = () => {
                                     <label>Time *</label>
                                     <select
                                         value={formData.time}
-                                        onChange={e => setFormData({...formData, time: e.target.value})}
+                                        onChange={e => setFormData({ ...formData, time: e.target.value })}
                                     >
                                         {TIME_SLOTS.map(time => <option key={time} value={time}>{time}</option>)}
                                     </select>
@@ -194,7 +194,7 @@ const Timetable = () => {
                                     <input
                                         type="text"
                                         value={formData.room}
-                                        onChange={e => setFormData({...formData, room: e.target.value})}
+                                        onChange={e => setFormData({ ...formData, room: e.target.value })}
                                         placeholder="e.g., Room 101"
                                     />
                                 </div>
@@ -203,7 +203,7 @@ const Timetable = () => {
                                     <input
                                         type="text"
                                         value={formData.teacher}
-                                        onChange={e => setFormData({...formData, teacher: e.target.value})}
+                                        onChange={e => setFormData({ ...formData, teacher: e.target.value })}
                                         placeholder="e.g., Dr. Smith"
                                     />
                                 </div>

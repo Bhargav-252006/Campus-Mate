@@ -1,5 +1,5 @@
-import React, {useState, useEffect} from 'react';
-import {Link} from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import {
     Timer,
     CheckSquare,
@@ -14,7 +14,7 @@ import {
     Target,
     Calendar as CalendarIcon
 } from 'lucide-react';
-import {getTimetable, getExams, getSchedule} from '../services/api';
+import { getTimetable, getExams, getSchedule } from '../services/api';
 
 const Dashboard = () => {
     const [stats, setStats] = useState({
@@ -56,7 +56,7 @@ const Dashboard = () => {
             const completedToday = schedule.filter(task => task.completed).length;
             const studyHours = (completedToday * 1.5).toFixed(1);
 
-            setStats({todayClasses, upcomingExams, pendingTasks, completedToday, studyHours});
+            setStats({ todayClasses, upcomingExams, pendingTasks, completedToday, studyHours });
         } catch (error) {
             console.error('Error loading dashboard:', error);
         } finally {
@@ -72,7 +72,7 @@ const Dashboard = () => {
     };
 
     const getDayDate = () => {
-        const options = {weekday: 'long', month: 'short', day: 'numeric'};
+        const options = { weekday: 'long', month: 'short', day: 'numeric' };
         return currentTime.toLocaleDateString('en-US', options);
     };
 
@@ -319,7 +319,7 @@ const Dashboard = () => {
 };
 
 // Stats Card Component
-const StatsCard = ({title, value, trend, trendUp, icon: Icon, color, bg}) => (
+const StatsCard = ({ title, value, trend, trendUp, icon: Icon, color, bg }) => (
     <div className="stats-card">
         <div className="stats-card-content">
             <div className="stats-header">
@@ -339,7 +339,7 @@ const StatsCard = ({title, value, trend, trendUp, icon: Icon, color, bg}) => (
 );
 
 // Schedule Item Component
-const ScheduleItem = ({time, title, type, location, status}) => (
+const ScheduleItem = ({ time, title, type, location, status }) => (
     <div className={`schedule-item ${status === 'current' ? 'schedule-item-active' : ''}`}>
         <div className="schedule-time">{time}</div>
         <div className="schedule-details">
@@ -356,7 +356,7 @@ const ScheduleItem = ({time, title, type, location, status}) => (
 );
 
 // Task Item Component
-const TaskItem = ({title, time, priority}) => {
+const TaskItem = ({ title, time, priority }) => {
     const priorityColors = {
         high: 'priority-high',
         medium: 'priority-medium',
@@ -381,7 +381,7 @@ const TaskItem = ({title, time, priority}) => {
 };
 
 // Exam Item Component
-const ExamItem = ({subject, daysLeft, progress}) => (
+const ExamItem = ({ subject, daysLeft, progress }) => (
     <div className="exam-item">
         <div className="exam-header">
             <span className="exam-subject">{subject}</span>
@@ -391,7 +391,7 @@ const ExamItem = ({subject, daysLeft, progress}) => (
         </div>
         <div className="exam-progress">
             <div className="progress-bar">
-                <div className="progress-fill" style={{width: `${progress}%`}}></div>
+                <div className="progress-fill" style={{ width: `${progress}%` }}></div>
             </div>
         </div>
     </div>
