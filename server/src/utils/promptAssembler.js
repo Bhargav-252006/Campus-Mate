@@ -97,6 +97,14 @@ class PromptAssembler {
         // 6. Response guidelines
         prompt += this.buildResponseGuidelines();
 
+        // 7. Enforce total character budget so Qwen3 8B doesn't get
+        //    oversized context (causes slow responses & wasted tokens).
+        //    Truncate from the end — agent instructions at top are kept.
+        if (prompt.length > this.MAX_TOTAL_CHARS) {
+            logger.debug(`Prompt truncated: ${prompt.length} → ${this.MAX_TOTAL_CHARS} chars`);
+            prompt = prompt.substring(0, this.MAX_TOTAL_CHARS);
+        }
+
         return prompt;
     }
 
@@ -118,7 +126,7 @@ class PromptAssembler {
         if (profile.subjects?.length > 0) section += `📚 Subjects: ${profile.subjects.join(', ')}\n`;
         if (profile.institution) section += `🏫 Institution: ${profile.institution}\n`;
         if (profile.goals?.length > 0) {
-            const recentGoals = profile.goals.slice(-3).map(g => g.goal || g).join('; ');
+            const recentGoals = profile.goals.slice(-3).map(g => g.text || g.goal || (typeof g === 'string' ? g : '')).filter(Boolean).join('; ');
             section += `🎯 Goals: ${recentGoals}\n`;
         }
         if (profile.strengths?.length > 0) section += `💪 Strengths: ${profile.strengths.join(', ')}\n`;
@@ -189,9 +197,9 @@ class PromptAssembler {
             return '';
         }
 
-        // Truncate if too long
+        // Truncate if too long (keep beginning which is most relevant)
         const truncatedSummary = summary.length > this.MAX_SUMMARY_CHARS
-            ? summary.substring(summary.length - this.MAX_SUMMARY_CHARS) + '...'
+            ? summary.substring(0, this.MAX_SUMMARY_CHARS) + '...'
             : summary;
 
         return `
@@ -232,10 +240,12 @@ ${truncatedSummary}
         // Take only the most recent messages
         const recent = recentMessages.slice(-this.MAX_RECENT_MESSAGES);
 
-        return recent.map(msg => ({
-            role: msg.sender === 'user' ? 'user' : 'assistant',
-            content: msg.text
-        }));
+        return recent
+            .filter(msg => msg && msg.sender && msg.text)
+            .map(msg => ({
+                role: msg.sender === 'user' ? 'user' : 'assistant',
+                content: msg.text || ''
+            }));
     }
 
     /**

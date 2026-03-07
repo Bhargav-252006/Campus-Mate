@@ -1,5 +1,6 @@
 const {callLLM} = require('../utils/llmService');
 const {getStudentMatePersona, getAdaptiveTone, getContinuityPrompt} = require('./studentMatePersona');
+const logger = require('../utils/logger');
 
 /**
  * ACADEMIC AGENT - Specialized for Educational Content
@@ -10,7 +11,7 @@ const AGENT_CONFIG = {
     name: 'Academic Agent',
     specialization: '📚 Academic Tutoring & Learning',
     temperature: 0.7,
-    maxTokens: 800,
+    maxTokens: 2000,
 
     topics: [
         'mathematics', 'physics', 'chemistry', 'biology',
@@ -72,7 +73,7 @@ class AcademicAgent {
     }
 
     async handle(message, context = '', userPatterns = {}, profile = {}) {
-        console.log(`[${this.config.name}] Processing academic query...`);
+        logger.agent(this.config.name, 'Processing academic query...');
 
         // Build unified Campus Mate persona + agent specialization
         const personaPrompt = getStudentMatePersona(profile, context, this.config.specialization);
@@ -122,9 +123,6 @@ Could you try asking again in a moment? Or if you want, rephrase it slightly - s
 I'm here for you! 💪`;
     }
 
-    matchesTopic(message, keywords) {
-        return keywords.some(kw => message.toLowerCase().includes(kw));
-    }
 }
 
 module.exports = new AcademicAgent();

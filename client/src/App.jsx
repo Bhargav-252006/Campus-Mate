@@ -1,58 +1,85 @@
-import React from 'react';
-import {BrowserRouter, Routes, Route} from 'react-router-dom';
+import React, {lazy, Suspense} from 'react';
+import {BrowserRouter, Routes, Route, Link} from 'react-router-dom';
 import Layout from './components/Layout';
-import LandingPage from './components/LandingPage';
-import Dashboard from './components/Dashboard';
-import Timetable from './components/Timetable';
-import Exams from './components/Exams';
-import Schedule from './components/Schedule';
-import Chat from './components/Chat';
-import Pomodoro from './components/Pomodoro';
-import MoodTracker from './components/MoodTracker';
-import Deadlines from './components/Deadlines';
-import Notes from './components/Notes';
-import Analytics from './components/Analytics';
-// New components
-import Flashcards from './components/Flashcards';
-import HabitTracker from './components/HabitTracker';
-import GradeCalculator from './components/GradeCalculator';
-import ResourceLibrary from './components/ResourceLibrary';
-// Context providers
+import ErrorBoundary from './components/ErrorBoundary';
+// Context providers (loaded eagerly since they wrap the app)
 import {ThemeProvider} from './context/ThemeContext';
 import {ToastProvider} from './context/ToastContext';
 import {KeyboardProvider} from './context/KeyboardShortcuts';
+
+// Lazy load all page components for code splitting
+const LandingPage = lazy(() => import('./components/LandingPage'));
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const Timetable = lazy(() => import('./components/Timetable'));
+const Exams = lazy(() => import('./components/Exams'));
+const Schedule = lazy(() => import('./components/Schedule'));
+const Chat = lazy(() => import('./components/Chat'));
+const Pomodoro = lazy(() => import('./components/Pomodoro'));
+const MoodTracker = lazy(() => import('./components/MoodTracker'));
+const Deadlines = lazy(() => import('./components/Deadlines'));
+const Notes = lazy(() => import('./components/Notes'));
+const Analytics = lazy(() => import('./components/Analytics'));
+const Flashcards = lazy(() => import('./components/Flashcards'));
+const HabitTracker = lazy(() => import('./components/HabitTracker'));
+const GradeCalculator = lazy(() => import('./components/GradeCalculator'));
+const ResourceLibrary = lazy(() => import('./components/ResourceLibrary'));
+const FocusMode = lazy(() => import('./components/FocusMode'));
+const SystemStats = lazy(() => import('./components/SystemStats'));
+
+// Loading fallback
+const PageLoader = () => (
+    <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '50vh'}}>
+        <div className="loading-spinner"></div>
+    </div>
+);
+
+// 404 page
+const NotFound = () => (
+    <div style={{textAlign: 'center', padding: '3rem'}}>
+        <h2>404 - Page Not Found</h2>
+        <p style={{color: '#666', margin: '1rem 0'}}>The page you're looking for doesn't exist.</p>
+        <Link to="/app" style={{color: '#3b82f6'}}>Go to Dashboard</Link>
+    </div>
+);
 
 function App() {
     return (
         <ThemeProvider>
             <ToastProvider>
-                <BrowserRouter>
-                    <KeyboardProvider>
-                        <Routes>
-                            <Route path="/" element={<LandingPage />} />
-                            <Route path="/app" element={<Layout />}>
-                                <Route index element={<Dashboard />} />
-                                <Route path="dashboard" element={<Dashboard />} />
-                                <Route path="timetable" element={<Timetable />} />
-                                <Route path="exams" element={<Exams />} />
-                                <Route path="schedule" element={<Schedule />} />
-                                <Route path="chat" element={<Chat />} />
-                                <Route path="pomodoro" element={<Pomodoro />} />
-                                <Route path="mood" element={<MoodTracker />} />
-                                <Route path="deadlines" element={<Deadlines />} />
-                                <Route path="notes" element={<Notes />} />
-                                <Route path="analytics" element={<Analytics />} />
-                                {/* New routes */}
-                                <Route path="flashcards" element={<Flashcards />} />
-                                <Route path="habits" element={<HabitTracker />} />
-                                <Route path="grades" element={<GradeCalculator />} />
-                                <Route path="resources" element={<ResourceLibrary />} />
-                            </Route>
-                        </Routes>
-                    </KeyboardProvider>
-                </BrowserRouter>
+                <ErrorBoundary>
+                    <BrowserRouter>
+                        <KeyboardProvider>
+                            <Suspense fallback={<PageLoader />}>
+                                <Routes>
+                                    <Route path="/" element={<LandingPage />} />
+                                    <Route path="/app" element={<Layout />}>
+                                        <Route index element={<Dashboard />} />
+                                        <Route path="dashboard" element={<Dashboard />} />
+                                        <Route path="timetable" element={<Timetable />} />
+                                        <Route path="exams" element={<Exams />} />
+                                        <Route path="schedule" element={<Schedule />} />
+                                        <Route path="chat" element={<Chat />} />
+                                        <Route path="pomodoro" element={<Pomodoro />} />
+                                        <Route path="mood" element={<MoodTracker />} />
+                                        <Route path="deadlines" element={<Deadlines />} />
+                                        <Route path="notes" element={<Notes />} />
+                                        <Route path="analytics" element={<Analytics />} />
+                                        <Route path="flashcards" element={<Flashcards />} />
+                                        <Route path="habits" element={<HabitTracker />} />
+                                        <Route path="grades" element={<GradeCalculator />} />
+                                        <Route path="resources" element={<ResourceLibrary />} />
+                                        <Route path="focus" element={<FocusMode />} />
+                                        <Route path="stats" element={<SystemStats />} />
+                                        <Route path="*" element={<NotFound />} />
+                                    </Route>
+                                    <Route path="*" element={<NotFound />} />
+                                </Routes>
+                            </Suspense>
+                        </KeyboardProvider>
+                    </BrowserRouter>
+                </ErrorBoundary>
             </ToastProvider>
-        </ThemeProvider >
+        </ThemeProvider>
     );
 }
 
