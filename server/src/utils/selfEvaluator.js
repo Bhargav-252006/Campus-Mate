@@ -154,12 +154,13 @@ class SelfEvaluator {
             .replace('{userMessage}', userMessage)
             .replace('{response}', response);
 
-        const result = await callLLM({
-            task: 'evaluation',
-            messages: [{role: 'user', content: prompt}],
-            maxTokens: 300,
-            temperature: 0.1  // Low temperature for consistent evaluation
-        });
+        // FIX: callLLM signature is (systemPrompt, userMessage, options, history)
+        const result = await callLLM(
+            'You are a strict response quality evaluator. Return only valid JSON, no explanation.',
+            prompt,
+            {maxTokens: 300, temperature: 0.1, taskType: 'classification'},
+            []
+        );
 
         // Parse JSON response
         try {

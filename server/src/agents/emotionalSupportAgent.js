@@ -1,5 +1,6 @@
 const {callLLM} = require('../utils/llmService');
 const {getStudentMatePersona, getAdaptiveTone, getContinuityPrompt} = require('./studentMatePersona');
+const logger = require('../utils/logger');
 
 /**
  * EMOTIONAL SUPPORT AGENT - Specialized for Mental Health & Wellbeing
@@ -10,7 +11,7 @@ const AGENT_CONFIG = {
     name: 'Emotional Support Agent',
     specialization: '💙 Emotional Support & Wellbeing',
     temperature: 0.8,  // Slightly higher for more empathetic responses
-    maxTokens: 500,
+    maxTokens: 1500,
 
     topics: [
         'stress', 'anxiety', 'depression', 'loneliness',
@@ -65,33 +66,23 @@ CRITICAL SAFETY RULES:
 Remember: You are a SAFE SPACE. No judgment. Just support and understanding. 💙`
 };
 
-// Indian helpline numbers
-const CRISIS_RESOURCES = {
-    india: [
-        {name: 'iCall', number: '9152987821'},
-        {name: 'Vandrevala Foundation', number: '1860-2662-345'},
-        {name: 'NIMHANS', number: '080-46110007'},
-        {name: 'Snehi', number: '044-24640050'}
-    ]
-};
-
 class EmotionalSupportAgent {
     constructor() {
         this.config = AGENT_CONFIG;
     }
 
     async handle(message, context = '', userPatterns = {}, profile = {}) {
-        console.log(`[${this.config.name}] Processing emotional support request...`);
+        logger.agent(this.config.name, 'Processing emotional support request...');
 
         // CRITICAL: Check for crisis keywords FIRST
         if (this.detectCrisis(message)) {
-            console.log(`[${this.config.name}] ⚠️ CRISIS DETECTED - Providing safety response`);
+            logger.warn(`[${this.config.name}] CRISIS DETECTED - Providing safety response`);
             return this.getCrisisResponse(profile);
         }
 
         // Build unified Student Mate persona + agent specialization
         const personaPrompt = getStudentMatePersona(profile, context, this.config.specialization);
-        const tonePrompt = getAdaptiveTone({...userPatterns, stressLevel: 'high'}); // Always empathetic mode
+        const tonePrompt = getAdaptiveTone(userPatterns); // Use actual patterns instead of forcing high
         const continuityPrompt = getContinuityPrompt();
 
         const fullSystemPrompt = personaPrompt + this.config.agentInstructions + tonePrompt + continuityPrompt;

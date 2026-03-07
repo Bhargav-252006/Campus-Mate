@@ -222,7 +222,7 @@ const GradeCalculator = () => {
     const neededGrade = calculateNeededGrade();
 
     return (
-        <div className="grades-page">
+        <div className="grades-page grade-calculator">
             <div className="page-header">
                 <div>
                     <h1><Calculator size={28} /> Grade Calculator</h1>
@@ -310,7 +310,7 @@ const GradeCalculator = () => {
                     </button>
                 </div>
             ) : (
-                <div className="courses-list">
+                <div className="courses-list courses-grid">
                     {courses.map(course => {
                         const grade = calculateCourseGrade(course);
                         return (
@@ -400,94 +400,102 @@ const GradeCalculator = () => {
             {showAddModal && (
                 <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
                     <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
-                        <h2>Add New Course</h2>
-
-                        <div className="form-row">
-                            <div className="form-group">
-                                <label>Course Name</label>
-                                <input
-                                    type="text"
-                                    value={newCourse.name}
-                                    onChange={e => setNewCourse({...newCourse, name: e.target.value})}
-                                    placeholder="e.g., Calculus I"
-                                />
-                            </div>
-                            <div className="form-group" style={{maxWidth: '120px'}}>
-                                <label>Credits</label>
-                                <input
-                                    type="number"
-                                    value={newCourse.credits}
-                                    onChange={e => setNewCourse({...newCourse, credits: parseInt(e.target.value) || 0})}
-                                    min="1"
-                                    max="6"
-                                />
-                            </div>
+                        <div className="modal-header">
+                            <h2>Add New Course</h2>
+                            <button className="close-btn" onClick={() => setShowAddModal(false)} aria-label="Close">
+                                <X size={18} />
+                            </button>
                         </div>
 
-                        <div className="form-group">
-                            <label>
-                                Grade Categories
-                                <span className="weight-total">
-                                    (Total: {newCourse.categories.reduce((sum, c) => sum + c.weight, 0)}%)
-                                </span>
-                            </label>
-                            <div className="categories-editor">
-                                {newCourse.categories.map((cat, i) => (
-                                    <div key={i} className="category-row">
-                                        <input
-                                            type="text"
-                                            value={cat.name}
-                                            onChange={e => {
-                                                const newCats = [...newCourse.categories];
-                                                newCats[i].name = e.target.value;
-                                                setNewCourse({...newCourse, categories: newCats});
-                                            }}
-                                            placeholder="Category name"
-                                        />
-                                        <div className="weight-input">
+                        <div className="modal-body">
+
+                            <div className="form-row">
+                                <div className="form-group">
+                                    <label>Course Name</label>
+                                    <input
+                                        type="text"
+                                        value={newCourse.name}
+                                        onChange={e => setNewCourse({...newCourse, name: e.target.value})}
+                                        placeholder="e.g., Calculus I"
+                                    />
+                                </div>
+                                <div className="form-group" style={{maxWidth: '120px'}}>
+                                    <label>Credits</label>
+                                    <input
+                                        type="number"
+                                        value={newCourse.credits}
+                                        onChange={e => setNewCourse({...newCourse, credits: parseInt(e.target.value) || 0})}
+                                        min="1"
+                                        max="6"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="form-group">
+                                <label>
+                                    Grade Categories
+                                    <span className="weight-total">
+                                        (Total: {newCourse.categories.reduce((sum, c) => sum + c.weight, 0)}%)
+                                    </span>
+                                </label>
+                                <div className="categories-editor">
+                                    {newCourse.categories.map((cat, i) => (
+                                        <div key={i} className="category-row">
                                             <input
-                                                type="number"
-                                                value={cat.weight}
+                                                type="text"
+                                                value={cat.name}
                                                 onChange={e => {
                                                     const newCats = [...newCourse.categories];
-                                                    newCats[i].weight = parseInt(e.target.value) || 0;
+                                                    newCats[i].name = e.target.value;
                                                     setNewCourse({...newCourse, categories: newCats});
                                                 }}
-                                                min="0"
-                                                max="100"
+                                                placeholder="Category name"
                                             />
-                                            <span>%</span>
+                                            <div className="weight-input">
+                                                <input
+                                                    type="number"
+                                                    value={cat.weight}
+                                                    onChange={e => {
+                                                        const newCats = [...newCourse.categories];
+                                                        newCats[i].weight = parseInt(e.target.value) || 0;
+                                                        setNewCourse({...newCourse, categories: newCats});
+                                                    }}
+                                                    min="0"
+                                                    max="100"
+                                                />
+                                                <span>%</span>
+                                            </div>
+                                            <button
+                                                className="btn-icon"
+                                                onClick={() => {
+                                                    const newCats = newCourse.categories.filter((_, idx) => idx !== i);
+                                                    setNewCourse({...newCourse, categories: newCats});
+                                                }}
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
                                         </div>
-                                        <button
-                                            className="btn-icon"
-                                            onClick={() => {
-                                                const newCats = newCourse.categories.filter((_, idx) => idx !== i);
-                                                setNewCourse({...newCourse, categories: newCats});
-                                            }}
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
-                                    </div>
-                                ))}
-                                <button
-                                    className="btn btn-ghost btn-sm"
-                                    onClick={() => setNewCourse({
-                                        ...newCourse,
-                                        categories: [...newCourse.categories, {name: '', weight: 0, grades: []}]
-                                    })}
-                                >
-                                    <Plus size={16} /> Add Category
+                                    ))}
+                                    <button
+                                        className="btn btn-ghost btn-sm"
+                                        onClick={() => setNewCourse({
+                                            ...newCourse,
+                                            categories: [...newCourse.categories, {name: '', weight: 0, grades: []}]
+                                        })}
+                                    >
+                                        <Plus size={16} /> Add Category
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="modal-actions">
+                                <button className="btn btn-ghost" onClick={() => setShowAddModal(false)}>
+                                    Cancel
+                                </button>
+                                <button className="btn btn-primary" onClick={addCourse}>
+                                    Add Course
                                 </button>
                             </div>
-                        </div>
-
-                        <div className="modal-actions">
-                            <button className="btn btn-ghost" onClick={() => setShowAddModal(false)}>
-                                Cancel
-                            </button>
-                            <button className="btn btn-primary" onClick={addCourse}>
-                                Add Course
-                            </button>
                         </div>
                     </div>
                 </div>

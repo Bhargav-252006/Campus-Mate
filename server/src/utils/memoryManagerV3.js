@@ -148,8 +148,8 @@ class MemoryManagerV3 {
         if (!this._dirty) return;
 
         try {
-            // Save memory
-            fs.writeFileSync(MEMORY_FILE, JSON.stringify({
+            // Save memory (async - non-blocking)
+            const memoryData = JSON.stringify({
                 workingMemory: this.workingMemory,
                 shortTermMemory: this.shortTermMemory,
                 episodicMemory: this.episodicMemory,
@@ -157,17 +157,26 @@ class MemoryManagerV3 {
                 lastAccess: this.lastAccess,
                 messageCount: this.messageCount,
                 savedAt: new Date().toISOString()
-            }, null, 2));
+            }, null, 2);
 
-            // Save profiles
-            fs.writeFileSync(PROFILES_FILE, JSON.stringify({
+            const profileData = JSON.stringify({
                 profiles: this.profiles,
                 preferences: this.preferences,
                 savedAt: new Date().toISOString()
-            }, null, 2));
+            }, null, 2);
+
+            // Use async writes to avoid blocking the event loop
+            const fsPromises = require('fs').promises;
+            Promise.all([
+                fsPromises.writeFile(MEMORY_FILE, memoryData),
+                fsPromises.writeFile(PROFILES_FILE, profileData)
+            ]).then(() => {
+                logger.debug('Memory saved to disk');
+            }).catch(err => {
+                logger.error('Failed to save memory (async)', err);
+            });
 
             this._dirty = false;
-            logger.debug('Memory saved to disk');
         } catch (error) {
             logger.error('Failed to save memory', error);
         }
@@ -181,7 +190,27 @@ class MemoryManagerV3 {
             clearTimeout(this._saveTimeout);
             this._saveTimeout = null;
         }
-        this._performSave();
+        // Force synchronous save for shutdown
+        if (!this._dirty) return;
+        try {
+            fs.writeFileSync(MEMORY_FILE, JSON.stringify({
+                workingMemory: this.workingMemory,
+                shortTermMemory: this.shortTermMemory,
+                episodicMemory: this.episodicMemory,
+                semanticMemory: this.semanticMemory,
+                lastAccess: this.lastAccess,
+                messageCount: this.messageCount,
+                savedAt: new Date().toISOString()
+            }, null, 2));
+            fs.writeFileSync(PROFILES_FILE, JSON.stringify({
+                profiles: this.profiles,
+                preferences: this.preferences,
+                savedAt: new Date().toISOString()
+            }, null, 2));
+            this._dirty = false;
+        } catch (error) {
+            logger.error('Failed to force save memory', error);
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -320,7 +349,9 @@ class MemoryManagerV3 {
      */
     extractAndStore(userId, text) {
         const profile = this.profiles[userId];
+        if (!profile) return;  // Guard against missing profile
         const semantic = this.semanticMemory[userId];
+        if (!semantic) return;  // Guard against missing semantic memory
         const lowerText = text.toLowerCase();
 
         // Extract name
@@ -393,7 +424,9 @@ class MemoryManagerV3 {
      * Add a fact to semantic memory
      */
     addFact(userId, fact, importance = CONFIG.MEDIUM_IMPORTANCE) {
+        this.initUserIfNeeded(userId);
         const semantic = this.semanticMemory[userId];
+        if (!semantic || !semantic.facts) return;
         if (!semantic.facts.some(f => f.text === fact)) {
             semantic.facts.push({
                 text: fact,
@@ -528,11 +561,11 @@ class MemoryManagerV3 {
 
     trimEpisodicMemory(userId) {
         // Keep total episodic memory under limit
-        let totalLength = JSON.stringify(this.episodicMemory[userId]).length;
-
-        while (totalLength > CONFIG.MAX_EPISODIC_LENGTH && this.episodicMemory[userId].length > 1) {
+        // Cache stringified length to avoid repeated serialization in loop
+        while (this.episodicMemory[userId].length > 1) {
+            const totalLength = JSON.stringify(this.episodicMemory[userId]).length;
+            if (totalLength <= CONFIG.MAX_EPISODIC_LENGTH) break;
             this.episodicMemory[userId].shift();
-            totalLength = JSON.stringify(this.episodicMemory[userId]).length;
         }
     }
 
@@ -596,7 +629,7 @@ class MemoryManagerV3 {
         if (profile.grade) section += `Level: ${profile.grade}\n`;
         if (profile.institution) section += `School: ${profile.institution}\n`;
         if (profile.subjects.length > 0) section += `Subjects: ${profile.subjects.join(', ')}\n`;
-        if (profile.goals.length > 0) section += `Goals: ${profile.goals.map(g => g.text).join('; ')}\n`;
+        if (profile.goals.length > 0) section += `Goals: ${profile.goals.map(g => g.text || (typeof g === 'string' ? g : '')).filter(Boolean).join('; ')}\n`;
         if (profile.weakAreas.length > 0) section += `Needs help with: ${profile.weakAreas.join(', ')}\n`;
         section += `Preferred style: ${prefs.explanationStyle}, ${prefs.tone}\n`;
         section += '\n';

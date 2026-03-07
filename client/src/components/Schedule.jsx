@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, Save, Check, Circle } from 'lucide-react';
-import { getSchedule, addTask, updateTask, deleteTask } from '../services/api';
+import React, {useState, useEffect} from 'react';
+import {Plus, Edit2, Trash2, X, Save, Check, Circle} from 'lucide-react';
+import {getSchedule, addTask, updateTask, deleteTask} from '../services/api';
 
 const PRIORITIES = ['low', 'medium', 'high'];
-const emptyTask = { task: '', priority: 'medium', dueTime: '', completed: false };
+const emptyTask = {task: '', priority: 'medium', dueTime: '', completed: false};
 
 const Schedule = () => {
     const [tasks, setTasks] = useState([]);
@@ -56,7 +56,7 @@ const Schedule = () => {
 
     const toggleComplete = async (task) => {
         try {
-            await updateTask(task.id, { ...task, completed: !task.completed });
+            await updateTask(task.id, {...task, completed: !task.completed});
             await loadTasks();
         } catch (error) {
             console.error('Error updating task:', error);
@@ -88,7 +88,7 @@ const Schedule = () => {
         return true;
     });
 
-    const priorityOrder = { high: 0, medium: 1, low: 2 };
+    const priorityOrder = {high: 0, medium: 1, low: 2};
     const sortedTasks = [...filteredTasks].sort((a, b) => {
         // Completed at bottom
         if (a.completed !== b.completed) return a.completed ? 1 : -1;
@@ -211,9 +211,9 @@ const Schedule = () => {
                 <input
                     type="text"
                     placeholder="Quick add a task... (press Enter)"
-                    onKeyPress={(e) => {
+                    onKeyDown={(e) => {
                         if (e.key === 'Enter' && e.target.value.trim()) {
-                            addTask({ ...emptyTask, task: e.target.value.trim() })
+                            addTask({...emptyTask, task: e.target.value.trim()})
                                 .then(() => {
                                     e.target.value = '';
                                     loadTasks();
@@ -239,7 +239,7 @@ const Schedule = () => {
                                 <input
                                     type="text"
                                     value={formData.task}
-                                    onChange={e => setFormData({ ...formData, task: e.target.value })}
+                                    onChange={e => setFormData({...formData, task: e.target.value})}
                                     required
                                     placeholder="What do you need to do?"
                                 />
@@ -249,7 +249,7 @@ const Schedule = () => {
                                     <label>Priority</label>
                                     <select
                                         value={formData.priority}
-                                        onChange={e => setFormData({ ...formData, priority: e.target.value })}
+                                        onChange={e => setFormData({...formData, priority: e.target.value})}
                                     >
                                         {PRIORITIES.map(p => (
                                             <option key={p} value={p}>
@@ -263,7 +263,7 @@ const Schedule = () => {
                                     <input
                                         type="time"
                                         value={formData.dueTime}
-                                        onChange={e => setFormData({ ...formData, dueTime: e.target.value })}
+                                        onChange={e => setFormData({...formData, dueTime: e.target.value})}
                                     />
                                 </div>
                             </div>

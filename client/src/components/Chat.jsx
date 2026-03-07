@@ -1,7 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Send, Mic, MicOff, Volume2, VolumeX, Trash2, Bot } from 'lucide-react';
-import { sendMessageToAgent, getChatHistory, clearChatHistory } from '../services/api';
+import React, {useState, useEffect, useRef} from 'react';
+import {Send, Mic, MicOff, Volume2, VolumeX, Trash2, Bot} from 'lucide-react';
+import {sendMessageToAgent, getChatHistory, clearChatHistory} from '../services/api';
 import ReactMarkdown from 'react-markdown';
+
+// Emoji regex extracted as a constant to avoid duplication
+const EMOJI_REGEX = /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{1F900}-\u{1F9FF}]|[\u{1FA00}-\u{1FA6F}]|[\u{1FA70}-\u{1FAFF}]|[\u{FE00}-\u{FE0F}]|[\u{2300}-\u{23FF}]|[\u{2B50}]|[\u{203C}]|[\u{2049}]|[\u{25AA}]|[\u{25AB}]|[\u{25B6}]|[\u{25C0}]|[\u{25FB}-\u{25FE}]|[\u{00A9}]|[\u{00AE}]|[\u{2122}]|[\u{2139}]|[\u{1F004}]|[\u{1F0CF}]|[\u{1F170}-\u{1F171}]|[\u{1F17E}-\u{1F17F}]|[\u{1F18E}]|[\u{3030}]|[\u{303D}]|[\u{3297}]|[\u{3299}]|[\u{1F201}-\u{1F202}]|[\u{1F21A}]|[\u{1F22F}]|[\u{1F232}-\u{1F23A}]|[\u{1F250}-\u{1F251}]|[\u{1F300}-\u{1F5FF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{1F700}-\u{1F77F}]|[\u{1F780}-\u{1F7FF}]|[\u{1F800}-\u{1F8FF}]|[\u{1F900}-\u{1F9FF}]|[\u{1FA00}-\u{1FA6F}]|[\u{1FA70}-\u{1FAFF}]/gu;
+
+// Counter for unique message IDs
+let messageIdCounter = 0;
 
 const Chat = () => {
     const [messages, setMessages] = useState([]);
@@ -22,7 +28,7 @@ const Chat = () => {
         let storedUserId = localStorage.getItem('student_mate_userId');
         if (!storedUserId) {
             // Generate unique ID: timestamp + random string
-            storedUserId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            storedUserId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
             localStorage.setItem('student_mate_userId', storedUserId);
             console.log('New user ID generated:', storedUserId);
         }
@@ -102,7 +108,7 @@ const Chat = () => {
     };
 
     const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        messagesEndRef.current?.scrollIntoView({behavior: 'smooth'});
     };
 
     const handleSend = async (text = inputText) => {
@@ -119,7 +125,7 @@ const Chat = () => {
         setVoiceInputUsed(false); // Reset for next input
 
         const userMessage = {
-            id: Date.now(),
+            id: `msg_${Date.now()}_${++messageIdCounter}`,
             sender: 'user',
             text: text.trim(),
             timestamp: new Date().toISOString()
@@ -133,7 +139,7 @@ const Chat = () => {
             const response = await sendMessageToAgent(text.trim(), userId);
 
             const botMessage = {
-                id: Date.now() + 1,
+                id: `msg_${Date.now()}_${++messageIdCounter}`,
                 sender: 'bot',
                 agent: response.agentUsed,
                 text: response.response,
@@ -149,7 +155,7 @@ const Chat = () => {
         } catch (error) {
             console.error('Error:', error);
             setMessages(prev => [...prev, {
-                id: Date.now() + 1,
+                id: `msg_${Date.now()}_${++messageIdCounter}`,
                 sender: 'bot',
                 agent: 'System',
                 text: "Sorry, I'm having trouble connecting. Please try again.",
@@ -162,20 +168,25 @@ const Chat = () => {
 
     const speakText = (text) => {
         if ('speechSynthesis' in window) {
-            window.speechSynthesis.cancel();
-            // Remove emojis from text before speaking
-            const textWithoutEmojis = text.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{1F900}-\u{1F9FF}]|[\u{1FA00}-\u{1FA6F}]|[\u{1FA70}-\u{1FAFF}]|[\u{FE00}-\u{FE0F}]|[\u{2300}-\u{23FF}]|[\u{2B50}]|[\u{203C}]|[\u{2049}]|[\u{25AA}]|[\u{25AB}]|[\u{25B6}]|[\u{25C0}]|[\u{25FB}-\u{25FE}]|[\u{00A9}]|[\u{00AE}]|[\u{2122}]|[\u{2139}]|[\u{1F004}]|[\u{1F0CF}]|[\u{1F170}-\u{1F171}]|[\u{1F17E}-\u{1F17F}]|[\u{1F18E}]|[\u{3030}]|[\u{303D}]|[\u{3297}]|[\u{3299}]|[\u{1F201}-\u{1F202}]|[\u{1F21A}]|[\u{1F22F}]|[\u{1F232}-\u{1F23A}]|[\u{1F250}-\u{1F251}]|[\u{1F300}-\u{1F5FF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{1F700}-\u{1F77F}]|[\u{1F780}-\u{1F7FF}]|[\u{1F800}-\u{1F8FF}]|[\u{1F900}-\u{1F9FF}]|[\u{1FA00}-\u{1FA6F}]|[\u{1FA70}-\u{1FAFF}]/gu, '').trim();
-            const utterance = new SpeechSynthesisUtterance(textWithoutEmojis);
+            try {
+                window.speechSynthesis.cancel();
+                // Remove emojis from text before speaking
+                const textWithoutEmojis = text.replace(EMOJI_REGEX, '').trim();
+                const utterance = new SpeechSynthesisUtterance(textWithoutEmojis);
 
-            if (selectedVoice) {
-                utterance.voice = selectedVoice;
+                if (selectedVoice) {
+                    utterance.voice = selectedVoice;
+                }
+
+                utterance.onstart = () => setIsCurrentlySpeaking(true);
+                utterance.onend = () => setIsCurrentlySpeaking(false);
+                utterance.onerror = () => setIsCurrentlySpeaking(false);
+
+                window.speechSynthesis.speak(utterance);
+            } catch (error) {
+                console.error('Speech synthesis error:', error);
+                setIsCurrentlySpeaking(false);
             }
-
-            utterance.onstart = () => setIsCurrentlySpeaking(true);
-            utterance.onend = () => setIsCurrentlySpeaking(false);
-            utterance.onerror = () => setIsCurrentlySpeaking(false);
-
-            window.speechSynthesis.speak(utterance);
         }
     };
 
@@ -189,18 +200,23 @@ const Chat = () => {
     const toggleListening = () => {
         if (!recognition) return;
 
-        if (isListening) {
-            recognition.stop();
-        } else {
-            recognition.start();
-            setIsListening(true);
+        try {
+            if (isListening) {
+                recognition.stop();
+            } else {
+                recognition.start();
+                setIsListening(true);
+            }
+        } catch (error) {
+            console.error('Speech recognition error:', error);
+            setIsListening(false);
         }
     };
 
     const handleClearChat = async () => {
         if (window.confirm('Clear all chat history?')) {
             try {
-                await clearChatHistory();
+                await clearChatHistory(userId);
                 setMessages([{
                     id: 'welcome',
                     sender: 'bot',
@@ -281,6 +297,15 @@ const Chat = () => {
                         key={msg.id}
                         className={`message ${msg.sender}`}
                     >
+                        {msg.sender === 'bot' && (
+                            <span
+                                className="agent-badge"
+                                style={{backgroundColor: getAgentColor(msg.agent)}}
+                                title={msg.agent}
+                            >
+                                {msg.agent || 'Assistant'}
+                            </span>
+                        )}
                         <div className="message-bubble">
                             {msg.sender === 'bot' ? (
                                 <div className="markdown-content">
@@ -319,7 +344,7 @@ const Chat = () => {
                         type="text"
                         value={inputText}
                         onChange={(e) => setInputText(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                         placeholder={isListening ? 'Listening...' : 'Type a message or click mic to speak...'}
                         disabled={isLoading || isListening}
                     />
@@ -332,7 +357,7 @@ const Chat = () => {
                     </button>
                 </div>
                 <p className="chat-hint">
-                    🎤 Voice replies auto-play when using mic • Toggle speaker for always-on voice "
+                    🎤 Voice replies auto-play when using mic • Toggle speaker for always-on voice
                 </p>
             </div>
         </div>

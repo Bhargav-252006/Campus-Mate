@@ -10,7 +10,7 @@ const AGENT_CONFIG = {
     name: 'Concept Gap Agent',
     specialization: '🔍 Finding & Filling Knowledge Gaps',
     temperature: 0.7,
-    maxTokens: 600,
+    maxTokens: 1500,
 
     topics: [
         'confused', "don't understand", "don't get", 'unclear',
