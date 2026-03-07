@@ -194,9 +194,12 @@ const logger = {
     separator: (title = '') => {
         const line = '═'.repeat(60);
         if (title) {
-            const padding = Math.floor((58 - title.length) / 2);
+            // Truncate title if too long to prevent negative repeat
+            const safeTitle = title.length > 54 ? title.substring(0, 54) : title;
+            const padding = Math.max(0, Math.floor((58 - safeTitle.length) / 2));
+            const rightPad = Math.max(0, 58 - padding - safeTitle.length);
             console.log(`\n╔${line}╗`);
-            console.log(`║${' '.repeat(padding)}${title}${' '.repeat(58 - padding - title.length)}║`);
+            console.log(`║${' '.repeat(padding)}${safeTitle}${' '.repeat(rightPad)}║`);
             console.log(`╚${line}╝`);
         } else {
             console.log(`\n${'─'.repeat(60)}\n`);

@@ -10,7 +10,7 @@ const AGENT_CONFIG = {
     name: 'Failure Pattern Agent',
     specialization: '🎯 Learning from Mistakes & Growth',
     temperature: 0.7,
-    maxTokens: 600,
+    maxTokens: 1500,
 
     topics: [
         'mistake', 'wrong', 'fail', 'error', 'incorrect',

@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 // Helper for requests
 const api = axios.create({
@@ -8,8 +8,39 @@ const api = axios.create({
     headers: {'Content-Type': 'application/json'}
 });
 
-// User ID - now accepts parameter instead of hardcoded
-const getUserId = (id) => id || 'user-123';
+// ============ AUTH & SESSION ============
+let sessionToken = localStorage.getItem('campusMate_token');
+let sessionUserId = localStorage.getItem('campusMate_userId') || 'user-123';
+
+// Attach token to all requests if available
+api.interceptors.request.use((config) => {
+    if (sessionToken) {
+        config.headers.Authorization = `Bearer ${sessionToken}`;
+    }
+    return config;
+});
+
+// Auto-create session on first load
+export const initSession = async (preferredUserId) => {
+    try {
+        const response = await api.post('/auth/session', {
+            userId: preferredUserId || sessionUserId
+        });
+        sessionToken = response.data.token;
+        sessionUserId = response.data.userId;
+        localStorage.setItem('campusMate_token', sessionToken);
+        localStorage.setItem('campusMate_userId', sessionUserId);
+        return response.data;
+    } catch (err) {
+        console.warn('Session init failed, using fallback userId');
+        return {userId: sessionUserId, token: null};
+    }
+};
+
+export const getSessionUserId = () => sessionUserId;
+
+// User ID - uses session userId
+const getUserId = (id) => id || sessionUserId;
 
 // ============ CHAT ============
 export const sendMessageToAgent = async (message, userId) => {
@@ -206,4 +237,9 @@ export const setReminder = async (title, datetime) => {
 
 export const getReminders = async () => {
     return callTool('Show my reminders');
+};
+
+export const getEnhancementStats = async () => {
+    const res = await api.get('/stats/enhancements');
+    return res.data;
 };

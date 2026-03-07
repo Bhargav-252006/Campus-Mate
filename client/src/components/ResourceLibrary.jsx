@@ -209,7 +209,7 @@ const ResourceLibrary = () => {
     const allTags = [...new Set(resources.flatMap(r => r.tags || []))];
 
     return (
-        <div className="resources-page">
+        <div className="resources-page resource-library">
             <div className="page-header">
                 <div>
                     <h1><Library size={28} /> Resource Library</h1>
@@ -225,9 +225,9 @@ const ResourceLibrary = () => {
                 </div>
             </div>
 
-            <div className="resources-layout">
+            <div className="resources-layout resource-layout">
                 {/* Sidebar */}
-                <div className="resources-sidebar">
+                <div className="resources-sidebar folders-sidebar">
                     <div
                         className={`folder-item ${selectedFolder === null ? 'active' : ''}`}
                         onClick={() => setSelectedFolder(null)}
@@ -282,7 +282,7 @@ const ResourceLibrary = () => {
                 {/* Main content */}
                 <div className="resources-main">
                     {/* Search and filters */}
-                    <div className="resources-toolbar">
+                    <div className="resources-toolbar resource-toolbar">
                         <div className="search-box">
                             <Search size={18} />
                             <input
@@ -330,7 +330,7 @@ const ResourceLibrary = () => {
                             )}
                         </div>
                     ) : (
-                        <div className="resources-grid">
+                        <div className="resources-grid resource-grid">
                             {filteredResources.map(resource => {
                                 const TypeIcon = RESOURCE_TYPES[resource.type]?.icon || Globe;
                                 const typeColor = RESOURCE_TYPES[resource.type]?.color || '#888';
@@ -400,110 +400,118 @@ const ResourceLibrary = () => {
             {showAddModal && (
                 <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
                     <div className="modal" onClick={e => e.stopPropagation()}>
-                        <h2>Add New Resource</h2>
-
-                        <div className="form-group">
-                            <label>Title *</label>
-                            <input
-                                type="text"
-                                value={newResource.title}
-                                onChange={e => setNewResource({...newResource, title: e.target.value})}
-                                placeholder="Resource title"
-                            />
+                        <div className="modal-header">
+                            <h2>Add New Resource</h2>
+                            <button className="close-btn" onClick={() => setShowAddModal(false)} aria-label="Close">
+                                <X size={18} />
+                            </button>
                         </div>
 
-                        <div className="form-group">
-                            <label>URL *</label>
-                            <input
-                                type="url"
-                                value={newResource.url}
-                                onChange={e => setNewResource({
-                                    ...newResource,
-                                    url: e.target.value,
-                                    type: detectType(e.target.value)
-                                })}
-                                placeholder="https://..."
-                            />
-                        </div>
-
-                        <div className="form-row">
-                            <div className="form-group">
-                                <label>Type</label>
-                                <select
-                                    value={newResource.type}
-                                    onChange={e => setNewResource({...newResource, type: e.target.value})}
-                                >
-                                    {Object.entries(RESOURCE_TYPES).map(([key, {label}]) => (
-                                        <option key={key} value={key}>{label}</option>
-                                    ))}
-                                </select>
-                            </div>
+                        <div className="modal-body">
 
                             <div className="form-group">
-                                <label>Folder</label>
-                                <select
-                                    value={newResource.folderId || ''}
-                                    onChange={e => setNewResource({
-                                        ...newResource,
-                                        folderId: e.target.value ? parseInt(e.target.value) : null
-                                    })}
-                                >
-                                    <option value="">None</option>
-                                    {folders.map(f => (
-                                        <option key={f.id} value={f.id}>{f.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
-
-                        <div className="form-group">
-                            <label>Description</label>
-                            <textarea
-                                value={newResource.description}
-                                onChange={e => setNewResource({...newResource, description: e.target.value})}
-                                placeholder="Optional description"
-                                rows={3}
-                            />
-                        </div>
-
-                        <div className="form-group">
-                            <label>Tags</label>
-                            <div className="tag-input">
+                                <label>Title *</label>
                                 <input
                                     type="text"
-                                    value={tagInput}
-                                    onChange={e => setTagInput(e.target.value)}
-                                    onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), addTag())}
-                                    placeholder="Add tags..."
-                                    list="existing-tags"
+                                    value={newResource.title}
+                                    onChange={e => setNewResource({...newResource, title: e.target.value})}
+                                    placeholder="Resource title"
                                 />
-                                <datalist id="existing-tags">
-                                    {allTags.map(t => <option key={t} value={t} />)}
-                                </datalist>
-                                <button className="btn btn-sm" onClick={addTag}>Add</button>
                             </div>
-                            <div className="tags-list">
-                                {newResource.tags.map(tag => (
-                                    <span key={tag} className="tag">
-                                        {tag}
-                                        <button onClick={() => setNewResource({
-                                            ...newResource,
-                                            tags: newResource.tags.filter(t => t !== tag)
-                                        })}>
-                                            <X size={12} />
-                                        </button>
-                                    </span>
-                                ))}
-                            </div>
-                        </div>
 
-                        <div className="modal-actions">
-                            <button className="btn btn-ghost" onClick={() => setShowAddModal(false)}>
-                                Cancel
-                            </button>
-                            <button className="btn btn-primary" onClick={addResource}>
-                                Add Resource
-                            </button>
+                            <div className="form-group">
+                                <label>URL *</label>
+                                <input
+                                    type="url"
+                                    value={newResource.url}
+                                    onChange={e => setNewResource({
+                                        ...newResource,
+                                        url: e.target.value,
+                                        type: detectType(e.target.value)
+                                    })}
+                                    placeholder="https://..."
+                                />
+                            </div>
+
+                            <div className="form-row">
+                                <div className="form-group">
+                                    <label>Type</label>
+                                    <select
+                                        value={newResource.type}
+                                        onChange={e => setNewResource({...newResource, type: e.target.value})}
+                                    >
+                                        {Object.entries(RESOURCE_TYPES).map(([key, {label}]) => (
+                                            <option key={key} value={key}>{label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="form-group">
+                                    <label>Folder</label>
+                                    <select
+                                        value={newResource.folderId || ''}
+                                        onChange={e => setNewResource({
+                                            ...newResource,
+                                            folderId: e.target.value ? parseInt(e.target.value) : null
+                                        })}
+                                    >
+                                        <option value="">None</option>
+                                        {folders.map(f => (
+                                            <option key={f.id} value={f.id}>{f.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="form-group">
+                                <label>Description</label>
+                                <textarea
+                                    value={newResource.description}
+                                    onChange={e => setNewResource({...newResource, description: e.target.value})}
+                                    placeholder="Optional description"
+                                    rows={3}
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label>Tags</label>
+                                <div className="tag-input">
+                                    <input
+                                        type="text"
+                                        value={tagInput}
+                                        onChange={e => setTagInput(e.target.value)}
+                                        onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), addTag())}
+                                        placeholder="Add tags..."
+                                        list="existing-tags"
+                                    />
+                                    <datalist id="existing-tags">
+                                        {allTags.map(t => <option key={t} value={t} />)}
+                                    </datalist>
+                                    <button className="btn btn-sm" onClick={addTag}>Add</button>
+                                </div>
+                                <div className="tags-list">
+                                    {newResource.tags.map(tag => (
+                                        <span key={tag} className="tag">
+                                            {tag}
+                                            <button onClick={() => setNewResource({
+                                                ...newResource,
+                                                tags: newResource.tags.filter(t => t !== tag)
+                                            })}>
+                                                <X size={12} />
+                                            </button>
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="modal-actions">
+                                <button className="btn btn-ghost" onClick={() => setShowAddModal(false)}>
+                                    Cancel
+                                </button>
+                                <button className="btn btn-primary" onClick={addResource}>
+                                    Add Resource
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -513,72 +521,80 @@ const ResourceLibrary = () => {
             {editingResource && (
                 <div className="modal-overlay" onClick={() => setEditingResource(null)}>
                     <div className="modal" onClick={e => e.stopPropagation()}>
-                        <h2>Edit Resource</h2>
-
-                        <div className="form-group">
-                            <label>Title *</label>
-                            <input
-                                type="text"
-                                value={editingResource.title}
-                                onChange={e => setEditingResource({...editingResource, title: e.target.value})}
-                            />
+                        <div className="modal-header">
+                            <h2>Edit Resource</h2>
+                            <button className="close-btn" onClick={() => setEditingResource(null)} aria-label="Close">
+                                <X size={18} />
+                            </button>
                         </div>
 
-                        <div className="form-group">
-                            <label>URL *</label>
-                            <input
-                                type="url"
-                                value={editingResource.url}
-                                onChange={e => setEditingResource({...editingResource, url: e.target.value})}
-                            />
-                        </div>
+                        <div className="modal-body">
 
-                        <div className="form-row">
                             <div className="form-group">
-                                <label>Type</label>
-                                <select
-                                    value={editingResource.type}
-                                    onChange={e => setEditingResource({...editingResource, type: e.target.value})}
-                                >
-                                    {Object.entries(RESOURCE_TYPES).map(([key, {label}]) => (
-                                        <option key={key} value={key}>{label}</option>
-                                    ))}
-                                </select>
+                                <label>Title *</label>
+                                <input
+                                    type="text"
+                                    value={editingResource.title}
+                                    onChange={e => setEditingResource({...editingResource, title: e.target.value})}
+                                />
                             </div>
 
                             <div className="form-group">
-                                <label>Folder</label>
-                                <select
-                                    value={editingResource.folderId || ''}
-                                    onChange={e => setEditingResource({
-                                        ...editingResource,
-                                        folderId: e.target.value ? parseInt(e.target.value) : null
-                                    })}
-                                >
-                                    <option value="">None</option>
-                                    {folders.map(f => (
-                                        <option key={f.id} value={f.id}>{f.name}</option>
-                                    ))}
-                                </select>
+                                <label>URL *</label>
+                                <input
+                                    type="url"
+                                    value={editingResource.url}
+                                    onChange={e => setEditingResource({...editingResource, url: e.target.value})}
+                                />
                             </div>
-                        </div>
 
-                        <div className="form-group">
-                            <label>Description</label>
-                            <textarea
-                                value={editingResource.description || ''}
-                                onChange={e => setEditingResource({...editingResource, description: e.target.value})}
-                                rows={3}
-                            />
-                        </div>
+                            <div className="form-row">
+                                <div className="form-group">
+                                    <label>Type</label>
+                                    <select
+                                        value={editingResource.type}
+                                        onChange={e => setEditingResource({...editingResource, type: e.target.value})}
+                                    >
+                                        {Object.entries(RESOURCE_TYPES).map(([key, {label}]) => (
+                                            <option key={key} value={key}>{label}</option>
+                                        ))}
+                                    </select>
+                                </div>
 
-                        <div className="modal-actions">
-                            <button className="btn btn-ghost" onClick={() => setEditingResource(null)}>
-                                Cancel
-                            </button>
-                            <button className="btn btn-primary" onClick={updateResource}>
-                                Save Changes
-                            </button>
+                                <div className="form-group">
+                                    <label>Folder</label>
+                                    <select
+                                        value={editingResource.folderId || ''}
+                                        onChange={e => setEditingResource({
+                                            ...editingResource,
+                                            folderId: e.target.value ? parseInt(e.target.value) : null
+                                        })}
+                                    >
+                                        <option value="">None</option>
+                                        {folders.map(f => (
+                                            <option key={f.id} value={f.id}>{f.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="form-group">
+                                <label>Description</label>
+                                <textarea
+                                    value={editingResource.description || ''}
+                                    onChange={e => setEditingResource({...editingResource, description: e.target.value})}
+                                    rows={3}
+                                />
+                            </div>
+
+                            <div className="modal-actions">
+                                <button className="btn btn-ghost" onClick={() => setEditingResource(null)}>
+                                    Cancel
+                                </button>
+                                <button className="btn btn-primary" onClick={updateResource}>
+                                    Save Changes
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -588,39 +604,47 @@ const ResourceLibrary = () => {
             {showFolderModal && (
                 <div className="modal-overlay" onClick={() => setShowFolderModal(false)}>
                     <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
-                        <h2>Create Folder</h2>
-
-                        <div className="form-group">
-                            <label>Folder Name</label>
-                            <input
-                                type="text"
-                                value={newFolder.name}
-                                onChange={e => setNewFolder({...newFolder, name: e.target.value})}
-                                placeholder="e.g., Mathematics"
-                            />
+                        <div className="modal-header">
+                            <h2>Create Folder</h2>
+                            <button className="close-btn" onClick={() => setShowFolderModal(false)} aria-label="Close">
+                                <X size={18} />
+                            </button>
                         </div>
 
-                        <div className="form-group">
-                            <label>Color</label>
-                            <div className="color-picker">
-                                {['#4a9eff', '#ff4a4a', '#4aff91', '#ff9f4a', '#c44aff', '#ffea4a', '#4afff4', '#ff4a91'].map(color => (
-                                    <button
-                                        key={color}
-                                        className={`color-btn ${newFolder.color === color ? 'active' : ''}`}
-                                        style={{background: color}}
-                                        onClick={() => setNewFolder({...newFolder, color})}
-                                    />
-                                ))}
+                        <div className="modal-body">
+
+                            <div className="form-group">
+                                <label>Folder Name</label>
+                                <input
+                                    type="text"
+                                    value={newFolder.name}
+                                    onChange={e => setNewFolder({...newFolder, name: e.target.value})}
+                                    placeholder="e.g., Mathematics"
+                                />
                             </div>
-                        </div>
 
-                        <div className="modal-actions">
-                            <button className="btn btn-ghost" onClick={() => setShowFolderModal(false)}>
-                                Cancel
-                            </button>
-                            <button className="btn btn-primary" onClick={addFolder}>
-                                Create Folder
-                            </button>
+                            <div className="form-group">
+                                <label>Color</label>
+                                <div className="color-picker">
+                                    {['#4a9eff', '#ff4a4a', '#4aff91', '#ff9f4a', '#c44aff', '#ffea4a', '#4afff4', '#ff4a91'].map(color => (
+                                        <button
+                                            key={color}
+                                            className={`color-btn ${newFolder.color === color ? 'active' : ''}`}
+                                            style={{background: color}}
+                                            onClick={() => setNewFolder({...newFolder, color})}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="modal-actions">
+                                <button className="btn btn-ghost" onClick={() => setShowFolderModal(false)}>
+                                    Cancel
+                                </button>
+                                <button className="btn btn-primary" onClick={addFolder}>
+                                    Create Folder
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

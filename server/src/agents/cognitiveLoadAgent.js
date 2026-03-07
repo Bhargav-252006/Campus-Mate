@@ -10,7 +10,7 @@ const AGENT_CONFIG = {
     name: 'Cognitive Load Agent',
     specialization: '⚡ Productivity & Time Management',
     temperature: 0.6,  // Lower for more structured, practical advice
-    maxTokens: 600,
+    maxTokens: 1500,
 
     topics: [
         'overwhelm', 'too much', 'time management', 'prioritize',

@@ -1,23 +1,57 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 const apiRoutes = require('./routes/api');
 const logger = require('./utils/logger');
+const {sanitizeMiddleware} = require('./utils/inputSanitizer');
+const memoryManager = require('./utils/memoryManagerV3');
+const n8nBridge = require('./integrations/n8nBridge');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
+// ============ RATE LIMITING ============
+const generalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,  // 15 minutes
+    max: 200,                   // 200 requests per 15 min
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {error: 'Too many requests, please try again later.'}
+});
+
+const chatLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000,  // 1 minute
+    max: 15,                    // 15 chat messages per minute
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {error: 'Too many chat messages. Please slow down.'}
+});
+
+// ============ CORS (Dynamic) ============
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
+    .split(',')
+    .map(o => o.trim())
+    .filter(Boolean);
+
+// Default origins for development
+const defaultOrigins = [
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://localhost:3000'
+];
+
+const origins = [...new Set([...defaultOrigins, ...allowedOrigins])];
+
 app.use(cors({
-    origin: [
-        'http://localhost:5173',
-        'http://localhost:5174',
-        'http://localhost:3000',
-        'https://1960de80eeab.ngrok-free.app'
-    ],
+    origin: origins,
     credentials: true
 }));
 app.use(express.json({limit: '10mb'}));
+
+// ============ SECURITY & SANITIZATION ============
+app.use(generalLimiter);       // Rate limit all routes
+app.use(sanitizeMiddleware);   // Sanitize all inputs
 
 // Request logging middleware
 app.use((req, res, next) => {
@@ -40,7 +74,8 @@ app.use((req, res, next) => {
     next();
 });
 
-// Routes
+// Routes - with chat-specific rate limiting
+app.use('/api/chat', chatLimiter);
 app.use('/api', apiRoutes);
 
 // Health Check
@@ -55,7 +90,9 @@ app.get('/', (req, res) => {
             exams: '/api/exams',
             schedule: '/api/schedule',
             profile: '/api/profile',
-            memory: '/api/memory/export'
+            memory: '/api/memory/export',
+            stats: '/api/stats/traces',
+            webhooks: '/api/webhooks/n8n'
         }
     });
 });
@@ -76,10 +113,43 @@ app.use((req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
     logger.separator('STUDENT MATE AI BACKEND');
     logger.success(`Server started on http://localhost:${PORT}`);
     logger.info(`Mode: ${process.env.NODE_ENV || 'development'}`);
+    logger.info(`CORS origins: ${origins.join(', ')}`);
     logger.info('Logs are saved to: server/logs/');
+
+    // Boot integrations
+    n8nBridge.start();
+
     logger.separator();
 });
+
+// ============ GRACEFUL SHUTDOWN ============
+const gracefulShutdown = (signal) => {
+    logger.info(`\n${signal} received. Shutting down gracefully...`);
+
+    // Flush all pending memory writes
+    try {
+        memoryManager.forceSave();
+        logger.success('Memory flushed to disk successfully.');
+    } catch (err) {
+        logger.error('Error flushing memory on shutdown', err);
+    }
+
+    // Close HTTP server
+    server.close(() => {
+        logger.info('HTTP server closed.');
+        process.exit(0);
+    });
+
+    // Force exit after 10s if server won't close
+    setTimeout(() => {
+        logger.warn('Forced shutdown after timeout.');
+        process.exit(1);
+    }, 10000);
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

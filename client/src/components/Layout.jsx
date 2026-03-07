@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import React, {useState} from 'react';
+import {NavLink, Outlet, useLocation} from 'react-router-dom';
 import {
     Calendar,
     ClipboardList,
@@ -26,24 +26,24 @@ import {
     Settings,
     Search
 } from 'lucide-react';
-import { useTheme } from '../context/ThemeContext';
-import { useToast } from '../context/ToastContext';
+import {useTheme} from '../context/ThemeContext';
+import {useToast} from '../context/ToastContext';
 
 const navItems = [
-    { path: '/app/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { path: '/app/chat', icon: MessageCircle, label: 'AI Companion' },
-    { path: '/app/pomodoro', icon: Timer, label: 'Pomodoro' },
-    { path: '/app/schedule', icon: CheckSquare, label: 'Tasks' },
-    { path: '/app/timetable', icon: Calendar, label: 'Timetable' },
-    { path: '/app/exams', icon: ClipboardList, label: 'Exams' },
-    { path: '/app/mood', icon: Heart, label: 'Mood' },
-    { path: '/app/notes', icon: FileText, label: 'Notes' },
-    { path: '/app/flashcards', icon: Brain, label: 'Flashcards' },
-    { path: '/app/habits', icon: CheckCircle2, label: 'Habits' },
-    { path: '/app/grades', icon: Calculator, label: 'Grades' },
-    { path: '/app/resources', icon: Library, label: 'Resources' },
-    { path: '/app/deadlines', icon: Target, label: 'Deadlines' },
-    { path: '/app/analytics', icon: BarChart3, label: 'Analytics' },
+    {path: '/app/dashboard', icon: LayoutDashboard, label: 'Dashboard'},
+    {path: '/app/chat', icon: MessageCircle, label: 'AI Companion'},
+    {path: '/app/pomodoro', icon: Timer, label: 'Pomodoro'},
+    {path: '/app/schedule', icon: CheckSquare, label: 'Tasks'},
+    {path: '/app/timetable', icon: Calendar, label: 'Timetable'},
+    {path: '/app/exams', icon: ClipboardList, label: 'Exams'},
+    {path: '/app/mood', icon: Heart, label: 'Mood'},
+    {path: '/app/notes', icon: FileText, label: 'Notes'},
+    {path: '/app/flashcards', icon: Brain, label: 'Flashcards'},
+    {path: '/app/habits', icon: CheckCircle2, label: 'Habits'},
+    {path: '/app/grades', icon: Calculator, label: 'Grades'},
+    {path: '/app/resources', icon: Library, label: 'Resources'},
+    {path: '/app/deadlines', icon: Target, label: 'Deadlines'},
+    {path: '/app/analytics', icon: BarChart3, label: 'Analytics'},
 ];
 
 // Export/Import functions (kept from original)
@@ -69,7 +69,7 @@ const exportAllData = (toast) => {
             }
         });
 
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -112,14 +112,17 @@ const importData = (toast) => {
 
 const Layout = () => {
     const [sidebarOpen, setSidebarOpen] = useState(true);
-    const { theme, toggleTheme } = useTheme();
+    const {theme, toggleTheme} = useTheme();
     const toast = useToast();
     const location = useLocation();
 
     // Get current page title
     const getCurrentPageTitle = () => {
         const current = navItems.find(item => item.path === location.pathname);
-        return current ? current.label : 'Campus Mate';
+        if (current) return current.label;
+        // /app (index) is the Dashboard
+        if (location.pathname === '/app' || location.pathname === '/app/') return 'Dashboard';
+        return 'Campus Mate';
     };
 
     return (
@@ -141,7 +144,7 @@ const Layout = () => {
                             <NavLink
                                 key={item.path}
                                 to={item.path}
-                                className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                                className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}
                                 title={item.label}
                             >
                                 <item.icon size={20} />
@@ -182,10 +185,10 @@ const Layout = () => {
                     </div>
 
                     <div className="header-actions">
-                         {/* Search Bar - Visual only for now */}
-                         <div className="hidden md:flex items-center bg-white/5 border border-white/10 rounded-full px-4 py-2 mr-4">
-                            <Search size={16} className="text-gray-400 mr-2"/>
-                            <input type="text" placeholder="Search..." className="bg-transparent border-none p-0 w-48 text-sm focus:ring-0 shadow-none"/>
+                        {/* Search Bar - Visual only for now */}
+                        <div className="hidden md:flex items-center bg-white/5 border border-white/10 rounded-full px-4 py-2 mr-4">
+                            <Search size={16} className="text-gray-400 mr-2" />
+                            <input type="text" placeholder="Search..." className="bg-transparent border-none p-0 w-48 text-sm focus:ring-0 shadow-none" />
                         </div>
 
                         <button className="icon-btn" onClick={() => importData(toast)} title="Import Data">

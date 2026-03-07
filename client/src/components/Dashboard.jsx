@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, {useState, useEffect} from 'react';
+import {Link} from 'react-router-dom';
 import {
     Timer,
     CheckSquare,
@@ -14,7 +14,7 @@ import {
     Target,
     Calendar as CalendarIcon
 } from 'lucide-react';
-import { getTimetable, getExams, getSchedule } from '../services/api';
+import {getTimetable, getExams, getSchedule} from '../services/api';
 
 const Dashboard = () => {
     const [stats, setStats] = useState({
@@ -29,7 +29,8 @@ const Dashboard = () => {
 
     useEffect(() => {
         loadDashboardData();
-        const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+        // Update every 60s instead of 1s to reduce re-renders
+        const timer = setInterval(() => setCurrentTime(new Date()), 60000);
         return () => clearInterval(timer);
     }, []);
 
@@ -54,9 +55,10 @@ const Dashboard = () => {
 
             const pendingTasks = schedule.filter(task => !task.completed).slice(0, 5);
             const completedToday = schedule.filter(task => task.completed).length;
-            const studyHours = (completedToday * 1.5).toFixed(1);
+            const totalTasks = schedule.length;
+            const studyHours = totalTasks > 0 ? (completedToday * 1.5).toFixed(1) : '0.0';
 
-            setStats({ todayClasses, upcomingExams, pendingTasks, completedToday, studyHours });
+            setStats({todayClasses, upcomingExams, pendingTasks, completedToday, studyHours});
         } catch (error) {
             console.error('Error loading dashboard:', error);
         } finally {
@@ -72,7 +74,7 @@ const Dashboard = () => {
     };
 
     const getDayDate = () => {
-        const options = { weekday: 'long', month: 'short', day: 'numeric' };
+        const options = {weekday: 'long', month: 'short', day: 'numeric'};
         return currentTime.toLocaleDateString('en-US', options);
     };
 
@@ -91,13 +93,34 @@ const Dashboard = () => {
 
     const getExamProgress = (exam) => {
         const daysUntil = getDaysUntilExam(exam.date);
-        const totalDays = 14;
-        return Math.max(0, Math.min(100, ((totalDays - daysUntil) / totalDays) * 100));
+        // Calculate how far we are from when the exam was added
+        // Use 14 days as default study window, capped at 100%
+        const totalDays = Math.max(14, daysUntil + 7); // assume exam was known at least 7 days before now
+        const daysPassed = totalDays - daysUntil;
+        return Math.max(0, Math.min(100, (daysPassed / totalDays) * 100));
     };
 
     const isClassCurrent = (classTime) => {
+        if (!classTime) return false;
         const [startTime] = classTime.split(' - ');
-        const [hours, minutes] = startTime.split(':').map(Number);
+        if (!startTime) return false;
+
+        // Parse time supporting both 24hr (14:30) and 12hr (2:30 PM) formats
+        let hours, minutes;
+        const timeMatch = startTime.trim().match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+        if (timeMatch) {
+            hours = parseInt(timeMatch[1]);
+            minutes = parseInt(timeMatch[2]);
+            const period = timeMatch[3];
+            if (period) {
+                if (period.toUpperCase() === 'PM' && hours < 12) hours += 12;
+                if (period.toUpperCase() === 'AM' && hours === 12) hours = 0;
+            }
+        } else {
+            return false;
+        }
+
+        if (isNaN(hours) || isNaN(minutes)) return false;
         const classDate = new Date(currentTime);
         classDate.setHours(hours, minutes, 0);
         const endDate = new Date(classDate.getTime() + 90 * 60000);
@@ -114,7 +137,7 @@ const Dashboard = () => {
     }
 
     return (
-        <div className="dashboard-page">
+        <div className="dashboard dashboard-page">
             {/* Welcome Section */}
             <div className="dashboard-header">
                 <div className="header-text">
@@ -138,8 +161,8 @@ const Dashboard = () => {
                 <StatsCard
                     title="Study Hours"
                     value={`${stats.studyHours}h`}
-                    trend="+12%"
-                    trendUp={true}
+                    trend={`${getTasksDonePercentage()}%`}
+                    trendUp={stats.completedToday > 0}
                     icon={Timer}
                     color="text-blue"
                     bg="bg-blue-light"
@@ -148,16 +171,16 @@ const Dashboard = () => {
                     title="Tasks Done"
                     value={`${stats.completedToday}/${stats.completedToday + stats.pendingTasks.length}`}
                     trend={`${getTasksDonePercentage()}%`}
-                    trendUp={true}
+                    trendUp={getTasksDonePercentage() > 50}
                     icon={CheckSquare}
                     color="text-green"
                     bg="bg-green-light"
                 />
                 <StatsCard
-                    title="Avg. Focus"
-                    value="85%"
-                    trend="+2.4%"
-                    trendUp={true}
+                    title="Upcoming"
+                    value={stats.upcomingExams.length}
+                    trend={stats.upcomingExams.length > 0 ? 'Exams' : 'None'}
+                    trendUp={stats.upcomingExams.length === 0}
                     icon={TrendingUp}
                     color="text-purple"
                     bg="bg-purple-light"
@@ -319,7 +342,7 @@ const Dashboard = () => {
 };
 
 // Stats Card Component
-const StatsCard = ({ title, value, trend, trendUp, icon: Icon, color, bg }) => (
+const StatsCard = ({title, value, trend, trendUp, icon: Icon, color, bg}) => (
     <div className="stats-card">
         <div className="stats-card-content">
             <div className="stats-header">
@@ -339,7 +362,7 @@ const StatsCard = ({ title, value, trend, trendUp, icon: Icon, color, bg }) => (
 );
 
 // Schedule Item Component
-const ScheduleItem = ({ time, title, type, location, status }) => (
+const ScheduleItem = ({time, title, type, location, status}) => (
     <div className={`schedule-item ${status === 'current' ? 'schedule-item-active' : ''}`}>
         <div className="schedule-time">{time}</div>
         <div className="schedule-details">
@@ -356,7 +379,7 @@ const ScheduleItem = ({ time, title, type, location, status }) => (
 );
 
 // Task Item Component
-const TaskItem = ({ title, time, priority }) => {
+const TaskItem = ({title, time, priority}) => {
     const priorityColors = {
         high: 'priority-high',
         medium: 'priority-medium',
@@ -381,7 +404,7 @@ const TaskItem = ({ title, time, priority }) => {
 };
 
 // Exam Item Component
-const ExamItem = ({ subject, daysLeft, progress }) => (
+const ExamItem = ({subject, daysLeft, progress}) => (
     <div className="exam-item">
         <div className="exam-header">
             <span className="exam-subject">{subject}</span>
@@ -391,7 +414,7 @@ const ExamItem = ({ subject, daysLeft, progress }) => (
         </div>
         <div className="exam-progress">
             <div className="progress-bar">
-                <div className="progress-fill" style={{ width: `${progress}%` }}></div>
+                <div className="progress-fill" style={{width: `${progress}%`}}></div>
             </div>
         </div>
     </div>

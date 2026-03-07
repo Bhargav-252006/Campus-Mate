@@ -12,6 +12,7 @@ class DataStore {
     constructor(filename) {
         this.filepath = path.join(DATA_DIR, filename);
         this.data = this.load();
+        this._saveTimeout = null;
     }
 
     load() {
@@ -27,8 +28,20 @@ class DataStore {
     }
 
     save() {
+        // Debounced async save to avoid blocking event loop
+        if (this._saveTimeout) {
+            clearTimeout(this._saveTimeout);
+        }
+        this._saveTimeout = setTimeout(() => {
+            this._performSave();
+            this._saveTimeout = null;
+        }, 500);
+    }
+
+    _performSave() {
         try {
-            fs.writeFileSync(this.filepath, JSON.stringify(this.data, null, 2));
+            fs.promises.writeFile(this.filepath, JSON.stringify(this.data, null, 2))
+                .catch(err => console.error(`Error saving ${this.filepath}:`, err));
         } catch (error) {
             console.error(`Error saving ${this.filepath}:`, error);
         }

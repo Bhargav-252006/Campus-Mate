@@ -10,7 +10,7 @@ const AGENT_CONFIG = {
     name: 'Persona Switch Agent',
     specialization: '🎭 Adaptive Teaching Styles',
     temperature: 0.8,  // Higher for more creative, varied responses
-    maxTokens: 600,
+    maxTokens: 1500,
 
     personas: {
         friend: {
