@@ -71,7 +71,7 @@ class EmotionalSupportAgent {
         this.config = AGENT_CONFIG;
     }
 
-    async handle(message, context = '', userPatterns = {}, profile = {}) {
+    async handle(message, context = '', userPatterns = {}, profile = {}, toolSchemas = []) {
         logger.agent(this.config.name, 'Processing emotional support request...');
 
         // CRITICAL: Check for crisis keywords FIRST
@@ -97,7 +97,8 @@ class EmotionalSupportAgent {
             {
                 maxTokens: this.config.maxTokens,
                 temperature: this.config.temperature,
-                taskType: 'empathy'  // Use main model for empathetic responses
+                taskType: 'heavy_reasoning',
+                toolSchemas
             }
         );
 

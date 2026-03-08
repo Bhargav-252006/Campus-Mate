@@ -91,7 +91,7 @@ class PersonaSwitchAgent {
         this.config = AGENT_CONFIG;
     }
 
-    async handle(message, context = '', userPatterns = {}, profile = {}) {
+    async handle(message, context = '', userPatterns = {}, profile = {}, toolSchemas = []) {
         console.log(`[${this.config.name}] Processing persona switch request...`);
 
         // Detect requested persona
@@ -121,7 +121,8 @@ class PersonaSwitchAgent {
             {
                 maxTokens: this.config.maxTokens,
                 temperature: this.config.temperature,
-                taskType: 'creative'  // Use creative model for persona switching
+                taskType: 'heavy_reasoning',
+                toolSchemas
             }
         );
 

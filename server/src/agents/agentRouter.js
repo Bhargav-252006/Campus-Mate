@@ -35,6 +35,8 @@ const {Classifier} = require('./classifier');
 const {SessionManager} = require('./sessionManager');
 const {detectToolTrigger, handleToolRequest} = require('./toolHandler');
 const {runPostProcessing, getToolsPromptForAgent} = require('./postProcessor');
+const {AGENT_TOOLS} = require('./postProcessor');
+const {getFilteredToolSchemas} = require('../tools/registry');
 
 class CentralizedAgent {
     constructor() {
@@ -118,7 +120,9 @@ class CentralizedAgent {
                 profile,
                 context,
                 recentMessages,
-                summary
+                summary,
+                conversationHistory: recentMessages || [],
+                llmOptions: {maxTokens: 2000, temperature: 0.7, taskType: 'heavy_reasoning'}
             });
         }
 
@@ -167,8 +171,12 @@ class CentralizedAgent {
             const toolsPrompt = getToolsPromptForAgent(agent);
             const contextWithTools = context + toolsPrompt;
 
+            // Get native tool schemas for Gemini function calling
+            const allowedTools = AGENT_TOOLS[agent] || [];
+            const toolSchemas = getFilteredToolSchemas(allowedTools);
+
             const agentResponse = await subAgent.agent.handle(
-                message, contextWithTools, patterns || userPatterns, profile
+                message, contextWithTools, patterns || userPatterns, profile, toolSchemas
             );
 
             // Agent handoff support
@@ -228,6 +236,7 @@ class CentralizedAgent {
         const {profile, preferences, summary, recentMessages, patterns} = memoryData;
 
         const generalToolsPrompt = getToolsPromptForAgent('GENERAL');
+        const generalToolSchemas = getFilteredToolSchemas(AGENT_TOOLS['GENERAL'] || []);
 
         const agentPrompt = getStudentMatePersona(profile, '', '💬 General Companion & Chat') + `
 GENERAL CONVERSATION MODE:
@@ -254,7 +263,8 @@ You can help with: academics, emotional support, productivity, learning from mis
         const response = await callLLM(assembled.systemPrompt, `Student says: ${message}`, {
             maxTokens: 2000,
             temperature: 0.8,
-            taskType: 'conversation'
+            taskType: 'heavy_reasoning',
+            toolSchemas: generalToolSchemas
         }, assembled.messages);
 
         if (response) return response;

@@ -43,10 +43,11 @@ export const getSessionUserId = () => sessionUserId;
 const getUserId = (id) => id || sessionUserId;
 
 // ============ CHAT ============
-export const sendMessageToAgent = async (message, userId) => {
+export const sendMessageToAgent = async (message, userId, clientRequestId) => {
     const response = await api.post('/chat', {
         message,
-        userId: getUserId(userId)
+        userId: getUserId(userId),
+        clientRequestId
     });
     return response.data;
 };

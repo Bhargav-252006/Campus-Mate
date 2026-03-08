@@ -9,8 +9,8 @@ const logger = require('../utils/logger');
 // Main chat endpoint
 router.post('/', async (req, res) => {
     try {
-        const {message} = req.body;
-        const userId = req.userId;
+        const {message, userId: bodyUserId, clientRequestId} = req.body;
+        const userId = req.userId || bodyUserId || 'user-123';
 
         if (!message) {
             logger.warn('Chat request missing message');
@@ -19,7 +19,7 @@ router.post('/', async (req, res) => {
 
         logger.user(userId, 'Chat request', message.substring(0, 50));
 
-        const envelope = await conversationService.handleChat({userId, message});
+        const envelope = await conversationService.handleChat({userId, message, clientRequestId});
 
         res.json(envelope);
     } catch (error) {

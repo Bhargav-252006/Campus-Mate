@@ -86,11 +86,24 @@ async function runPostProcessing(response, opts) {
     }
 
     // Step 4.5c: Tool-Call Post-Processor
-    const toolResult = await parseAndExecuteToolCalls(response.text, userId);
-    if (toolResult.toolsExecuted.length > 0) {
-        response.text = toolResult.text;
-        response._toolsExecuted = toolResult.toolsExecuted;
-        logger.info(`🔧 Executed ${toolResult.toolsExecuted.length} tool(s) from LLM response`);
+    // First try native Gemini function calls (JSON with __toolCalls)
+    const nativeResult = await handleNativeToolCalls(
+        response.text, userId,
+        opts.systemPrompt || '', opts.message,
+        opts.conversationHistory || [], opts.llmOptions || {}
+    );
+    if (nativeResult) {
+        response.text = nativeResult.text;
+        response._toolsExecuted = nativeResult.toolsExecuted;
+        logger.info(`🔧 Executed ${nativeResult.toolsExecuted.length} native tool(s)`);
+    } else {
+        // Fallback: regex-based [TOOL_CALL:...] parsing (for DeepSeek / non-Gemini)
+        const toolResult = await parseAndExecuteToolCalls(response.text, userId);
+        if (toolResult.toolsExecuted.length > 0) {
+            response.text = toolResult.text;
+            response._toolsExecuted = toolResult.toolsExecuted;
+            logger.info(`🔧 Executed ${toolResult.toolsExecuted.length} tool(s) from LLM response`);
+        }
     }
 
     // Step 4.5d: Stall Detector
@@ -144,6 +157,131 @@ function getToolsPromptForAgent(agentType) {
     }
     prompt += '\nIMPORTANT: Only include a TOOL_CALL when the user explicitly asks for an action (set reminder, log mood, start pomodoro, etc). Do NOT call tools for general questions.\n';
     return prompt;
+}
+
+/**
+ * Handle native Gemini function calling results.
+ * Detects `__toolCalls` JSON from callLLM, executes tools, then does
+ * a follow-up LLM call with tool results (up to 3 iterations).
+ */
+async function handleNativeToolCalls(responseText, userId, systemPrompt, userMessage, conversationHistory, options) {
+    let parsed;
+    try {
+        parsed = JSON.parse(responseText);
+    } catch { return null; }
+
+    if (!parsed?.__toolCalls || !parsed.toolCalls?.length) return null;
+
+    const {callLLM} = require('../utils/llmService');
+    const MAX_ITERATIONS = 3;
+    let toolCalls = parsed.toolCalls;
+    let assistantContent = parsed.content || '';
+    let model = parsed.model || '';
+    const allToolsExecuted = [];
+
+    // Build full message history for follow-up calls
+    const messages = [{role: 'system', content: systemPrompt}];
+    (conversationHistory || []).forEach(msg => {
+        const content = (msg.text || '').trim();
+        const role = msg.sender === 'user' ? 'user' : 'assistant';
+        if (content.length > 0) messages.push({role, content});
+    });
+    messages.push({role: 'user', content: userMessage});
+
+    for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
+        logger.info(`🔧 Native tool call iteration ${iteration + 1}: ${toolCalls.map(t => t.name).join(', ')}`);
+
+        // Add the assistant message with tool_calls
+        const assistantMsg = {role: 'assistant', content: assistantContent || null};
+        assistantMsg.tool_calls = toolCalls.map(tc => ({
+            id: tc.id,
+            type: 'function',
+            function: {name: tc.name, arguments: JSON.stringify(tc.args)}
+        }));
+        messages.push(assistantMsg);
+
+        // Execute each tool and add tool result messages
+        for (const tc of toolCalls) {
+            const result = await toolService.executeTool({name: tc.name, args: tc.args, userId});
+            allToolsExecuted.push({tool: tc.name, params: tc.args, success: result.success});
+
+            let resultContent;
+            if (result.success) {
+                logger.info(`✅ Native tool ${tc.name} executed successfully`);
+                const r = result.result;
+                resultContent = typeof r === 'string' ? r : (r?.message || JSON.stringify(r, null, 2));
+            } else {
+                logger.warn(`❌ Native tool ${tc.name} failed: ${result.error}`);
+                resultContent = JSON.stringify({error: result.error || 'Tool execution failed'});
+            }
+
+            messages.push({role: 'tool', tool_call_id: tc.id, content: resultContent});
+        }
+
+        // Follow-up call — pass tool results back to Gemini WITHOUT tool schemas
+        // (so it generates a natural language summary, not another tool call loop)
+        const followUpOptions = {...options, toolSchemas: null, maxTokens: options.maxTokens || 800};
+        delete followUpOptions.toolSchemas;
+
+        try {
+            const {callGeminiWithTools} = require('../utils/llmService');
+            const body = {
+                model: model || options.model || 'gemini-2.5-flash',
+                messages,
+                max_tokens: followUpOptions.maxTokens,
+                temperature: followUpOptions.temperature || 0.7
+            };
+            if (body.model.startsWith('gemini-2.5')) {
+                body.reasoning_effort = 'low';
+            }
+
+            const {config} = require('../utils/llmService');
+            const response = await fetch(`${config.gemini.baseUrl}/chat/completions`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${config.gemini.apiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(body)
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                logger.error(`Gemini follow-up API Error (${response.status})`, new Error(errorText));
+                break;
+            }
+
+            const data = await response.json();
+            const choice = data?.choices?.[0]?.message;
+
+            // If the model wants to call more tools, loop
+            if (choice?.tool_calls && choice.tool_calls.length > 0) {
+                toolCalls = choice.tool_calls.map(tc => ({
+                    id: tc.id,
+                    name: tc.function.name,
+                    args: JSON.parse(tc.function.arguments || '{}')
+                }));
+                assistantContent = choice.content || '';
+                continue;
+            }
+
+            // Final text response
+            const finalText = choice?.content?.trim();
+            if (finalText) {
+                return {text: finalText, toolsExecuted: allToolsExecuted};
+            }
+        } catch (error) {
+            logger.error('Native tool follow-up failed', error);
+        }
+        break;
+    }
+
+    // If we get here, build a fallback from tool results
+    if (allToolsExecuted.length > 0) {
+        const fallback = assistantContent || 'I executed the requested action.';
+        return {text: fallback, toolsExecuted: allToolsExecuted};
+    }
+    return null;
 }
 
 /**
@@ -204,5 +342,6 @@ module.exports = {
     runPostProcessing,
     getToolsPromptForAgent,
     parseAndExecuteToolCalls,
+    handleNativeToolCalls,
     AGENT_TOOLS
 };

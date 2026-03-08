@@ -72,7 +72,7 @@ class AcademicAgent {
         this.config = AGENT_CONFIG;
     }
 
-    async handle(message, context = '', userPatterns = {}, profile = {}) {
+    async handle(message, context = '', userPatterns = {}, profile = {}, toolSchemas = []) {
         logger.agent(this.config.name, 'Processing academic query...');
 
         // Build unified Campus Mate persona + agent specialization
@@ -92,7 +92,8 @@ class AcademicAgent {
             {
                 maxTokens: this.config.maxTokens,
                 temperature: this.config.temperature,
-                taskType: 'teaching'  // Use main model for educational content
+                taskType: 'heavy_reasoning',
+                toolSchemas
             }
         );
 

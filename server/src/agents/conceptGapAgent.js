@@ -86,7 +86,7 @@ class ConceptGapAgent {
         this.config = AGENT_CONFIG;
     }
 
-    async handle(message, context = '', userPatterns = {}, profile = {}) {
+    async handle(message, context = '', userPatterns = {}, profile = {}, toolSchemas = []) {
         console.log(`[${this.config.name}] Diagnosing concept gaps...`);
 
         // Build unified Student Mate persona + agent specialization
@@ -106,7 +106,8 @@ class ConceptGapAgent {
             {
                 maxTokens: this.config.maxTokens,
                 temperature: this.config.temperature,
-                taskType: 'teaching'  // Use main model for gap identification
+                taskType: 'heavy_reasoning',
+                toolSchemas
             }
         );
 

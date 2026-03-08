@@ -64,7 +64,7 @@ class CognitiveLoadAgent {
         this.config = AGENT_CONFIG;
     }
 
-    async handle(message, context = '', userPatterns = {}, profile = {}) {
+    async handle(message, context = '', userPatterns = {}, profile = {}, toolSchemas = []) {
         console.log(`[${this.config.name}] Processing cognitive load request...`);
 
         // Build unified Student Mate persona + agent specialization
@@ -84,7 +84,8 @@ class CognitiveLoadAgent {
             {
                 maxTokens: this.config.maxTokens,
                 temperature: this.config.temperature,
-                taskType: 'analysis'  // Use main model for cognitive analysis
+                taskType: 'heavy_reasoning',
+                toolSchemas
             }
         );
 

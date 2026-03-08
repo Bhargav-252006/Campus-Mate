@@ -75,7 +75,7 @@ class FailurePatternAgent {
         this.config = AGENT_CONFIG;
     }
 
-    async handle(message, context = '', userPatterns = {}, profile = {}) {
+    async handle(message, context = '', userPatterns = {}, profile = {}, toolSchemas = []) {
         console.log(`[${this.config.name}] Analyzing failure patterns...`);
 
         // Build unified Student Mate persona + agent specialization
@@ -95,7 +95,8 @@ class FailurePatternAgent {
             {
                 maxTokens: this.config.maxTokens,
                 temperature: this.config.temperature,
-                taskType: 'analysis'  // Use main model for pattern analysis
+                taskType: 'heavy_reasoning',
+                toolSchemas
             }
         );
 

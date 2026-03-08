@@ -26,26 +26,39 @@ const logger = require('../utils/logger');
 class ConversationService {
     /**
      * Handle a single chat turn.
-     * @param {{ userId: string, message: string }} opts
+     * @param {{ userId: string, message: string, clientRequestId?: string }} opts
      * @returns {{ response: string, agentUsed: string, timestamp: string, meta?: object }}
      */
-    async handleChat({userId, message}) {
+    async handleChat({userId, message, clientRequestId}) {
         const startTime = Date.now();
+        const userTimestamp = new Date().toISOString();
+
+        chatHistoryStore.add(userId, {
+            sender: 'user',
+            text: message,
+            timestamp: userTimestamp,
+            clientRequestId
+        });
 
         // Delegate to CentralizedAgent (the existing orchestrator)
         const agentResponse = await centralizedAgent.processRequest(message, userId);
 
         const latency = Date.now() - startTime;
 
-        // Persist to chat history store (separate from memory)
-        chatHistoryStore.add(userId, {sender: 'user', text: message});
-        chatHistoryStore.add(userId, {sender: 'bot', agent: agentResponse.agent, text: agentResponse.text});
+        chatHistoryStore.add(userId, {
+            sender: 'bot',
+            agent: agentResponse.agent,
+            text: agentResponse.text,
+            timestamp: new Date().toISOString(),
+            clientRequestId
+        });
 
         // Normalize response envelope
         const envelope = {
             response: agentResponse.text,
             agentUsed: agentResponse.agent,
             timestamp: new Date().toISOString(),
+            clientRequestId,
             confidence: agentResponse.confidence,
             confidenceLevel: agentResponse.confidenceLevel,
             toolsUsed: agentResponse._toolsExecuted || [],

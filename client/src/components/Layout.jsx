@@ -22,9 +22,7 @@ import {
     Moon,
     Download,
     Upload,
-    LogOut,
-    Settings,
-    Search
+    Settings
 } from 'lucide-react';
 import {useTheme} from '../context/ThemeContext';
 import {useToast} from '../context/ToastContext';
@@ -185,12 +183,6 @@ const Layout = () => {
                     </div>
 
                     <div className="header-actions">
-                        {/* Search Bar - Visual only for now */}
-                        <div className="hidden md:flex items-center bg-white/5 border border-white/10 rounded-full px-4 py-2 mr-4">
-                            <Search size={16} className="text-gray-400 mr-2" />
-                            <input type="text" placeholder="Search..." className="bg-transparent border-none p-0 w-48 text-sm focus:ring-0 shadow-none" />
-                        </div>
-
                         <button className="icon-btn" onClick={() => importData(toast)} title="Import Data">
                             <Upload size={18} />
                         </button>
