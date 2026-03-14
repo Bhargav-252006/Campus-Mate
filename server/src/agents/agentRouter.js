@@ -169,14 +169,17 @@ class CentralizedAgent {
 
         try {
             const toolsPrompt = getToolsPromptForAgent(agent);
-            const contextWithTools = context + toolsPrompt;
+
+            // Build enriched context: full memory context + profile/preferences/summary
+            // injected explicitly so sub-agents don't miss this data (Fix #4).
+            const enrichedContext = this.buildEnrichedContext(memoryData, toolsPrompt);
 
             // Get native tool schemas for Gemini function calling
             const allowedTools = AGENT_TOOLS[agent] || [];
             const toolSchemas = getFilteredToolSchemas(allowedTools);
 
             const agentResponse = await subAgent.agent.handle(
-                message, contextWithTools, patterns || userPatterns, profile, toolSchemas
+                message, enrichedContext, patterns || userPatterns, profile, toolSchemas
             );
 
             // Agent handoff support
@@ -231,6 +234,54 @@ class CentralizedAgent {
     // ═══════════════════════════════════════════════════════════════
     //                    GENERAL HANDLER
     // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * Build enriched context string for sub-agents.
+     * Combines full memory context with profile, preferences, summary, and
+     * patterns so that sub-agents receive the same rich data that
+     * handleGeneralWithLLM() gets via promptAssembler (Fix #4).
+     */
+    buildEnrichedContext(memoryData, toolsPrompt = '') {
+        const {context, profile, preferences, summary, patterns} = memoryData;
+        let enriched = context || '';
+
+        // Append preference info if sub-agents need it
+        if (preferences) {
+            const prefParts = [];
+            if (preferences.tone) prefParts.push(`Preferred tone: ${preferences.tone}`);
+            if (preferences.explanationStyle) prefParts.push(`Explanation style: ${preferences.explanationStyle}`);
+            if (preferences.detailLevel) prefParts.push(`Detail level: ${preferences.detailLevel}`);
+            if (prefParts.length > 0) {
+                enriched += `\n=== USER PREFERENCES ===\n${prefParts.join('\n')}\n`;
+            }
+        }
+
+        // Append summary if available and not already in context
+        if (summary && !enriched.includes(summary.substring(0, 50))) {
+            enriched += `\n=== CONVERSATION SUMMARY ===\n${summary.substring(0, 500)}\n`;
+        }
+
+        // Append pattern info
+        if (patterns) {
+            const patternParts = [];
+            if (patterns.stressLevel && patterns.stressLevel !== 'normal') {
+                patternParts.push(`Stress level: ${patterns.stressLevel}`);
+            }
+            if (patterns.currentMood && patterns.currentMood !== 'neutral') {
+                patternParts.push(`Current mood: ${patterns.currentMood}`);
+            }
+            if (patternParts.length > 0) {
+                enriched += `\n=== DETECTED PATTERNS ===\n${patternParts.join('\n')}\n`;
+            }
+        }
+
+        // Append tools prompt
+        if (toolsPrompt) {
+            enriched += toolsPrompt;
+        }
+
+        return enriched;
+    }
 
     async handleGeneralWithLLM(message, memoryData, userId) {
         const {profile, preferences, summary, recentMessages, patterns} = memoryData;

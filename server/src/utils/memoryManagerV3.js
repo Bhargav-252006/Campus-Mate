@@ -86,6 +86,7 @@ class MemoryManagerV3 {
         // Debounce state
         this._saveTimeout = null;
         this._dirty = false;
+        this._writeInProgress = false;
 
         // Load from disk
         this.loadFromDisk();
@@ -146,8 +147,19 @@ class MemoryManagerV3 {
 
     _performSave() {
         if (!this._dirty) return;
+        if (this._writeInProgress) {
+            // A write is already in flight — re-schedule so we don't lose
+            // any mutations that arrived while the previous write ran.
+            this._saveTimeout = setTimeout(() => {
+                this._saveTimeout = null;
+                this._performSave();
+            }, CONFIG.SAVE_DEBOUNCE_MS);
+            return;
+        }
 
         try {
+            this._writeInProgress = true;
+
             // Save memory (async - non-blocking)
             const memoryData = JSON.stringify({
                 workingMemory: this.workingMemory,
@@ -171,13 +183,17 @@ class MemoryManagerV3 {
                 fsPromises.writeFile(MEMORY_FILE, memoryData),
                 fsPromises.writeFile(PROFILES_FILE, profileData)
             ]).then(() => {
+                // Clear dirty flag AFTER write succeeds (Fix #3: race condition)
+                this._dirty = false;
+                this._writeInProgress = false;
                 logger.debug('Memory saved to disk');
             }).catch(err => {
+                this._writeInProgress = false;
                 logger.error('Failed to save memory (async)', err);
+                // Keep _dirty = true so next debounce retries
             });
-
-            this._dirty = false;
         } catch (error) {
+            this._writeInProgress = false;
             logger.error('Failed to save memory', error);
         }
     }
@@ -828,15 +844,8 @@ class MemoryManagerV3 {
 // Singleton
 const memoryManager = new MemoryManagerV3();
 
-// Save on process exit
-process.on('SIGINT', () => {
-    memoryManager.forceSave();
-    process.exit();
-});
-
-process.on('SIGTERM', () => {
-    memoryManager.forceSave();
-    process.exit();
-});
+// NOTE: Shutdown handlers (SIGINT/SIGTERM) are managed exclusively by app.js
+// which calls memoryManager.forceSave(). We do NOT register process handlers
+// here to avoid double-exit race conditions (Fix #6).
 
 module.exports = memoryManager;

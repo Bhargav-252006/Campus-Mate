@@ -17,7 +17,6 @@
 
 const centralizedAgent = require('../agents/agentRouter');
 const memoryManager = require('../utils/memoryManagerV3');
-const {chatHistoryStore} = require('../utils/dataStore');
 const eventBus = require('../core/eventBus');
 const {statsRepo} = require('../repositories');
 const features = require('../config/features');
@@ -26,32 +25,23 @@ const logger = require('../utils/logger');
 class ConversationService {
     /**
      * Handle a single chat turn.
+     *
+     * NOTE: Message persistence is handled exclusively by memoryManagerV3
+     * (inside agentRouter.processRequest). The old chatHistoryStore was
+     * removed entirely (Issue #1 fix) — memoryManager is the single
+     * source of truth for conversation history.
+     *
      * @param {{ userId: string, message: string, clientRequestId?: string }} opts
      * @returns {{ response: string, agentUsed: string, timestamp: string, meta?: object }}
      */
     async handleChat({userId, message, clientRequestId}) {
         const startTime = Date.now();
-        const userTimestamp = new Date().toISOString();
-
-        chatHistoryStore.add(userId, {
-            sender: 'user',
-            text: message,
-            timestamp: userTimestamp,
-            clientRequestId
-        });
 
         // Delegate to CentralizedAgent (the existing orchestrator)
+        // agentRouter stores both user and bot messages in memoryManager
         const agentResponse = await centralizedAgent.processRequest(message, userId);
 
         const latency = Date.now() - startTime;
-
-        chatHistoryStore.add(userId, {
-            sender: 'bot',
-            agent: agentResponse.agent,
-            text: agentResponse.text,
-            timestamp: new Date().toISOString(),
-            clientRequestId
-        });
 
         // Normalize response envelope
         const envelope = {
@@ -89,16 +79,18 @@ class ConversationService {
 
     /**
      * Get chat history for a user.
+     * Uses memoryManager as the single source of truth (Issue #1 fix).
      */
     getHistory(userId) {
-        return chatHistoryStore.getAll(userId);
+        return memoryManager.getRecentMessages(userId, 50);
     }
 
     /**
      * Clear chat history for a user.
+     * Uses memoryManager as the single source of truth (Issue #1 fix).
      */
     clearHistory(userId) {
-        chatHistoryStore.clear(userId);
+        memoryManager.clearConversation(userId);
     }
 }
 

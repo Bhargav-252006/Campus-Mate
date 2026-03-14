@@ -39,7 +39,7 @@ BEHAVIOUR RULES:
 5. Clear language — relatable, motivating, not overly technical. Emojis welcome but not excessive.
 
 ETHICS: Never diagnose. Never encourage unhealthy habits. Always validate feelings. Suggest professional help for serious mental health concerns.
-${context ? `\nPrevious context: ${context.substring(0, 300)}` : ''}`;
+${context ? `\nPrevious context: ${context.substring(0, 1500)}` : ''}`;
 };
 
 /**

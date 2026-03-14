@@ -1,14 +1,14 @@
 /**
- * 📊 POST-PROCESSOR - Response quality pipeline
+ * POST-PROCESSOR - Response quality pipeline
  *
- * Extracted from agentRouter.js processRequest() steps 4.5a–4.5e.
+ * Extracted from agentRouter.js processRequest() steps 4.5a-4.5e.
  *
  * Runs five checks on every sub-agent response:
- *   a) Self-Evaluation  — quality gate
- *   b) Confidence Score  — certainty metric
- *   c) Tool-Call Parser  — [TOOL_CALL: …] execution
- *   d) Stall Detector    — loop recovery
- *   e) Progress Ledger   — step logging
+ *   a) Self-Evaluation  -- quality gate (with retry on failure)
+ *   b) Confidence Score  -- certainty metric
+ *   c) Tool-Call Parser  -- [TOOL_CALL: ...] execution
+ *   d) Stall Detector    -- loop recovery
+ *   e) Progress Ledger   -- step logging
  */
 
 const selfEvaluator = require('../utils/selfEvaluator');
@@ -18,6 +18,7 @@ const progressLedger = require('../utils/progressLedger');
 const toolService = require('../services/toolService');
 const {normalizeResponse} = require('../services/responsePipeline');
 const {parseToolCalls} = require('./toolCallParser');
+const {callLLM, config: llmConfig} = require('../utils/llmService');
 const features = require('../config/features');
 const logger = require('../utils/logger');
 
@@ -38,7 +39,15 @@ const AGENT_TOOLS = {
 /**
  * Run the full post-processing pipeline on a response.
  *
- * @param {object} response  - {text, agent, ...} from sub-agent
+ * IMPORTANT: This function MUTATES the response object in-place.
+ * After this call, response will have additional properties:
+ *   - response.confidence     {number}  - confidence score 0-1
+ *   - response.confidenceLevel {string} - 'high'|'medium'|'low'
+ *   - response._toolsExecuted {Array}   - tools that were executed
+ *   - response._evalIssues    {Array}   - self-evaluation issues (if any)
+ *   - response._recovered     {boolean} - true if stall recovery was applied
+ *
+ * @param {object} response  - {text, agent, ...} from sub-agent (MUTATED)
  * @param {object} opts
  * @param {string} opts.agentType       - classification agent name
  * @param {string} opts.userId
@@ -47,7 +56,7 @@ const AGENT_TOOLS = {
  * @param {object} opts.context         - memory context string
  * @param {Array}  opts.recentMessages
  * @param {string} opts.summary
- * @returns {object} mutated response with confidence, tools, etc.
+ * @returns {object} the same (mutated) response object
  */
 async function runPostProcessing(response, opts) {
     const {agentType, userId, message, profile, context, recentMessages, summary} = opts;
@@ -55,7 +64,7 @@ async function runPostProcessing(response, opts) {
     // Step 0: Normalize response (strip <think>, enforce length, etc.)
     response.text = normalizeResponse(response.text);
 
-    // Step 4.5a: Self-Evaluation
+    // Step 4.5a: Self-Evaluation (with retry on failure - Fix #5)
     if (features.ENABLE_SELF_EVAL) {
         const evalResult = await selfEvaluator.evaluate(
             message, response.text, agentType, {userId, profile}
@@ -63,6 +72,30 @@ async function runPostProcessing(response, opts) {
         if (!evalResult.passed && evalResult.issues?.length > 0) {
             logger.warn('Self-evaluation flagged issues', {agent: agentType, issues: evalResult.issues});
             response._evalIssues = evalResult.issues;
+
+            // Attempt regeneration if evaluation says we should retry
+            if (evalResult.shouldRetry && opts.llmOptions) {
+                logger.info('Self-eval triggered response regeneration');
+                try {
+                    const improvedPrompt = `The previous response had these issues: ${evalResult.issues.join(', ')}. ${evalResult.suggestion || 'Please provide a better response.'}`;
+                    const regenerated = await callLLM(
+                        opts.systemPrompt || '',
+                        `Original question: ${message}\n\nImprovement guidance: ${improvedPrompt}`,
+                        {
+                            maxTokens: opts.llmOptions.maxTokens || 2000,
+                            temperature: Math.max(0.3, (opts.llmOptions.temperature || 0.7) - 0.2),
+                            taskType: opts.llmOptions.taskType || 'heavy_reasoning'
+                        }
+                    );
+                    if (regenerated) {
+                        response.text = normalizeResponse(regenerated);
+                        response._regenerated = true;
+                        logger.info('Response regenerated after self-eval failure');
+                    }
+                } catch (regenError) {
+                    logger.error('Regeneration failed, keeping original response', regenError);
+                }
+            }
         }
     }
 
@@ -172,7 +205,6 @@ async function handleNativeToolCalls(responseText, userId, systemPrompt, userMes
 
     if (!parsed?.__toolCalls || !parsed.toolCalls?.length) return null;
 
-    const {callLLM} = require('../utils/llmService');
     const MAX_ITERATIONS = 3;
     let toolCalls = parsed.toolCalls;
     let assistantContent = parsed.content || '';
@@ -224,7 +256,6 @@ async function handleNativeToolCalls(responseText, userId, systemPrompt, userMes
         delete followUpOptions.toolSchemas;
 
         try {
-            const {callGeminiWithTools} = require('../utils/llmService');
             const body = {
                 model: model || options.model || 'gemini-2.5-flash',
                 messages,
@@ -235,11 +266,10 @@ async function handleNativeToolCalls(responseText, userId, systemPrompt, userMes
                 body.reasoning_effort = 'low';
             }
 
-            const {config} = require('../utils/llmService');
-            const response = await fetch(`${config.gemini.baseUrl}/chat/completions`, {
+            const response = await fetch(`${llmConfig.gemini.baseUrl}/chat/completions`, {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${config.gemini.apiKey}`,
+                    'Authorization': `Bearer ${llmConfig.gemini.apiKey}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify(body)
