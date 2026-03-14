@@ -53,6 +53,7 @@ const CERTAINTY_PHRASES = [
 class ConfidenceScorer {
     constructor() {
         this.scoreHistory = {};  // Track scores for analysis
+        this._maxHistoryPerUser = 100; // P9 fix: cap history to prevent unbounded growth
     }
 
     /**

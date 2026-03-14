@@ -9,7 +9,7 @@ const logger = require('../utils/logger');
 // GET /api/stats/traces - LLM run traces
 router.get('/traces', async (req, res) => {
     try {
-        const userId = req.query.userId || null;
+        const userId = req.userId;
         const limit = parseInt(req.query.limit || '50', 10);
         const traces = await statsRepo.getTraces({userId, limit});
         res.json({count: traces.length, traces});
@@ -19,10 +19,10 @@ router.get('/traces', async (req, res) => {
     }
 });
 
-// GET /api/stats/progress/:userId - User progress snapshot
-router.get('/progress/:userId', async (req, res) => {
+// GET /api/stats/progress - User progress snapshot (uses req.userId)
+router.get('/progress', async (req, res) => {
     try {
-        const snapshot = await statsRepo.getSnapshot(req.params.userId);
+        const snapshot = await statsRepo.getSnapshot(req.userId);
         res.json(snapshot || {message: 'No stats yet'});
     } catch (error) {
         logger.error('Stats progress error', error);
@@ -30,11 +30,10 @@ router.get('/progress/:userId', async (req, res) => {
     }
 });
 
-// POST /api/stats/reset - Reset stats for a user
+// POST /api/stats/reset - Reset stats for authenticated user
 router.post('/reset', async (req, res) => {
     try {
-        const {userId} = req.body;
-        if (!userId) return res.status(400).json({error: 'userId required'});
+        const userId = req.userId;
         await statsRepo.saveSnapshot(userId, {});
         res.json({success: true, message: 'Stats reset'});
     } catch (error) {

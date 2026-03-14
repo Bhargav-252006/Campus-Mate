@@ -17,7 +17,7 @@ const logger = require('./logger');
 const CONFIG = {
     MAX_MESSAGE_LENGTH: 5000,       // Max chars per message
     MAX_USER_ID_LENGTH: 100,        // Max userId length
-    BLOCK_ON_INJECTION: false,      // false = sanitize, true = reject
+    BLOCK_ON_INJECTION: true,       // S7 fix: block injection attempts by default
     LOG_BLOCKED: true,
 };
 
@@ -126,10 +126,11 @@ function sanitizeMessage(message) {
 }
 
 /**
- * Sanitize userId
+ * Sanitize userId — strips non-alphanumeric chars, enforces length.
+ * Returns null if input is empty/invalid (let auth middleware handle default).
  */
 function sanitizeUserId(userId) {
-    if (!userId || typeof userId !== 'string') return 'user-123';
+    if (!userId || typeof userId !== 'string') return null;
 
     // Only allow alphanumeric, hyphens, underscores
     let clean = userId.replace(/[^a-zA-Z0-9\-_]/g, '');
@@ -138,7 +139,7 @@ function sanitizeUserId(userId) {
         clean = clean.substring(0, CONFIG.MAX_USER_ID_LENGTH);
     }
 
-    return clean || 'user-123';
+    return clean || null;
 }
 
 /**

@@ -33,10 +33,16 @@ function generateStudyTasks(subject, duration, frequency, startDate) {
 function createStudyPlan({subject, duration, frequency, startDate, goals = []}, userId) {
     if (!studyPlans[userId]) studyPlans[userId] = [];
 
+    // E4 fix: Validate startDate, default to today if invalid/missing
+    const parsedStart = startDate ? new Date(startDate) : new Date();
+    if (isNaN(parsedStart.getTime())) {
+        return {message: 'Invalid start date. Please provide a valid date.', plan: null};
+    }
+
     const plan = {
         id: generateId(), subject, duration, frequency,
-        startDate: new Date(startDate).toISOString(), goals,
-        tasks: generateStudyTasks(subject, duration, frequency, startDate),
+        startDate: parsedStart.toISOString(), goals,
+        tasks: generateStudyTasks(subject, duration, frequency, parsedStart),
         createdAt: new Date().toISOString(), active: true
     };
 

@@ -7,7 +7,8 @@
 
 const config = {
     // ── Post-processing pipeline toggles ─────────────────────
-    ENABLE_SELF_EVAL: process.env.ENABLE_SELF_EVAL !== 'false',
+    // P7 fix: Self-eval defaults to OFF — it doubles latency with an extra LLM call per response
+    ENABLE_SELF_EVAL: process.env.ENABLE_SELF_EVAL === 'true',
     ENABLE_CONFIDENCE_SCORING: process.env.ENABLE_CONFIDENCE_SCORING !== 'false',
     ENABLE_STALL_DETECTION: process.env.ENABLE_STALL_DETECTION !== 'false',
     ENABLE_PROGRESS_LEDGER: process.env.ENABLE_PROGRESS_LEDGER !== 'false',

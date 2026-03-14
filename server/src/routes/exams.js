@@ -8,7 +8,7 @@ const logger = require('../utils/logger');
 
 router.get('/', (req, res) => {
     try {
-        const userId = req.query.userId || 'user-123';
+        const userId = req.userId;
         const exams = examsStore.getAll(userId);
         res.json(exams);
     } catch (error) {
@@ -19,14 +19,15 @@ router.get('/', (req, res) => {
 
 router.post('/', (req, res) => {
     try {
-        const {userId, ...exam} = req.body;
+        const userId = req.userId;
+        const exam = req.body;
         if (!exam.subject || !exam.date) {
             return res.status(400).json({error: 'Subject and date are required'});
         }
         if (exam.date && isNaN(new Date(exam.date).getTime())) {
             return res.status(400).json({error: 'Invalid exam date'});
         }
-        const newExam = examsStore.add(userId || 'user-123', exam);
+        const newExam = examsStore.add(userId, exam);
         res.status(201).json(newExam);
     } catch (error) {
         logger.error('Error adding exam', error);
@@ -37,8 +38,9 @@ router.post('/', (req, res) => {
 router.put('/:id', (req, res) => {
     try {
         const {id} = req.params;
-        const {userId, ...updates} = req.body;
-        const updated = examsStore.update(userId || 'user-123', id, updates);
+        const userId = req.userId;
+        const updates = req.body;
+        const updated = examsStore.update(userId, id, updates);
         if (updated) {
             res.json(updated);
         } else {
@@ -53,7 +55,7 @@ router.put('/:id', (req, res) => {
 router.delete('/:id', (req, res) => {
     try {
         const {id} = req.params;
-        const userId = req.query.userId || 'user-123';
+        const userId = req.userId;
         const deleted = examsStore.delete(userId, id);
         if (deleted) {
             res.json({success: true});

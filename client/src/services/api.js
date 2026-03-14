@@ -10,7 +10,7 @@ const api = axios.create({
 
 // ============ AUTH & SESSION ============
 let sessionToken = localStorage.getItem('campusMate_token');
-let sessionUserId = localStorage.getItem('campusMate_userId') || 'user-123';
+let sessionUserId = localStorage.getItem('campusMate_userId') || null;
 
 // Attach token to all requests if available
 api.interceptors.request.use((config) => {
@@ -20,11 +20,25 @@ api.interceptors.request.use((config) => {
     return config;
 });
 
+// Handle 401 responses: auto-re-authenticate
+api.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+        if (error.response?.status === 401 && !error.config._retry) {
+            error.config._retry = true;
+            await initSession();
+            error.config.headers.Authorization = `Bearer ${sessionToken}`;
+            return api(error.config);
+        }
+        return Promise.reject(error);
+    }
+);
+
 // Auto-create session on first load
 export const initSession = async (preferredUserId) => {
     try {
         const response = await api.post('/auth/session', {
-            userId: preferredUserId || sessionUserId
+            userId: preferredUserId || sessionUserId || undefined
         });
         sessionToken = response.data.token;
         sessionUserId = response.data.userId;
@@ -33,118 +47,120 @@ export const initSession = async (preferredUserId) => {
         return response.data;
     } catch (err) {
         console.warn('Session init failed, using fallback userId');
+        if (!sessionUserId) {
+            sessionUserId = `user-${Date.now().toString(36)}`;
+            localStorage.setItem('campusMate_userId', sessionUserId);
+        }
         return {userId: sessionUserId, token: null};
     }
 };
 
 export const getSessionUserId = () => sessionUserId;
 
-// User ID - uses session userId
-const getUserId = (id) => id || sessionUserId;
-
 // ============ CHAT ============
+// Server derives userId from JWT token — no need to send in body/query
 export const sendMessageToAgent = async (message, userId, clientRequestId) => {
     const response = await api.post('/chat', {
         message,
-        userId: getUserId(userId),
         clientRequestId
     });
     return response.data;
 };
 
-export const getChatHistory = async (userId) => {
+export const getChatHistory = async () => {
     try {
-        const response = await api.get(`/chat/history?userId=${getUserId(userId)}`);
+        const response = await api.get('/chat/history');
         return response.data;
-    } catch {
+    } catch (err) {
+        console.warn('Failed to load chat history', err?.message);
         return [];
     }
 };
 
-export const clearChatHistory = async (userId) => {
-    await api.delete(`/chat/history?userId=${getUserId(userId)}`);
+export const clearChatHistory = async () => {
+    await api.delete('/chat/history');
 };
 
 // ============ TIMETABLE ============
 export const getTimetable = async () => {
     try {
-        const response = await api.get(`/timetable?userId=${getUserId()}`);
+        const response = await api.get('/timetable');
         return response.data;
-    } catch {
+    } catch (err) {
+        console.warn('Failed to load timetable', err?.message);
         return [];
     }
 };
 
 export const addTimetableEntry = async (entry) => {
-    const response = await api.post('/timetable', {...entry, userId: getUserId()});
+    const response = await api.post('/timetable', entry);
     return response.data;
 };
 
 export const updateTimetableEntry = async (id, entry) => {
-    const response = await api.put(`/timetable/${id}`, {...entry, userId: getUserId()});
+    const response = await api.put(`/timetable/${id}`, entry);
     return response.data;
 };
 
 export const deleteTimetableEntry = async (id) => {
-    await api.delete(`/timetable/${id}?userId=${getUserId()}`);
+    await api.delete(`/timetable/${id}`);
 };
 
 // ============ EXAMS ============
 export const getExams = async () => {
     try {
-        const response = await api.get(`/exams?userId=${getUserId()}`);
+        const response = await api.get('/exams');
         return response.data;
-    } catch {
+    } catch (err) {
+        console.warn('Failed to load exams', err?.message);
         return [];
     }
 };
 
 export const addExam = async (exam) => {
-    const response = await api.post('/exams', {...exam, userId: getUserId()});
+    const response = await api.post('/exams', exam);
     return response.data;
 };
 
 export const updateExam = async (id, exam) => {
-    const response = await api.put(`/exams/${id}`, {...exam, userId: getUserId()});
+    const response = await api.put(`/exams/${id}`, exam);
     return response.data;
 };
 
 export const deleteExam = async (id) => {
-    await api.delete(`/exams/${id}?userId=${getUserId()}`);
+    await api.delete(`/exams/${id}`);
 };
 
 // ============ SCHEDULE (TASKS) ============
 export const getSchedule = async () => {
     try {
-        const response = await api.get(`/schedule?userId=${getUserId()}`);
+        const response = await api.get('/schedule');
         return response.data;
-    } catch {
+    } catch (err) {
+        console.warn('Failed to load schedule', err?.message);
         return [];
     }
 };
 
 export const addTask = async (task) => {
-    const response = await api.post('/schedule', {...task, userId: getUserId()});
+    const response = await api.post('/schedule', task);
     return response.data;
 };
 
 export const updateTask = async (id, task) => {
-    const response = await api.put(`/schedule/${id}`, {...task, userId: getUserId()});
+    const response = await api.put(`/schedule/${id}`, task);
     return response.data;
 };
 
 export const deleteTask = async (id) => {
-    await api.delete(`/schedule/${id}?userId=${getUserId()}`);
+    await api.delete(`/schedule/${id}`);
 };
 
 // ============ TOOLS API ============
 
-// Helper to call tools via chat
+// Helper to call tools via chat (server derives userId from token)
 const callTool = async (message) => {
-    const response = await api.post('/chat', {
-        message,
-        userId: getUserId()
-    });
+    const response = await api.post('/chat', {message});
     return response.data;
 };
 

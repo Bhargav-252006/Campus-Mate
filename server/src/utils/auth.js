@@ -1,20 +1,30 @@
 /**
- * 🔐 Authentication Middleware (JWT)
+ * Authentication Middleware (JWT)
  * 
- * Lightweight auth system for Campus Mate:
+ * Device-based auth for Campus Mate:
  * - Auto-generates a session token on first visit (no login required)
  * - Validates tokens on protected routes
  * - Maps tokens to userIds for data isolation
- * 
- * This is a "device-based" auth — each browser session gets a unique userId.
- * Upgrade to full OAuth (Google login) for production.
+ * - userId from token takes precedence over body/query params
  */
 
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const logger = require('./logger');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'campus-mate-dev-secret-change-in-production';
+// S1 fix: Require JWT_SECRET from env, generate a random one for dev only
+const JWT_SECRET = (() => {
+    if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
+    if (process.env.NODE_ENV === 'production') {
+        logger.error('FATAL: JWT_SECRET must be set in production environment');
+        process.exit(1);
+    }
+    // Dev-only: generate a random secret per server start (sessions won't survive restarts)
+    const devSecret = crypto.randomBytes(32).toString('hex');
+    logger.warn('No JWT_SECRET set — using ephemeral random secret (dev mode only)');
+    return devSecret;
+})();
+
 const JWT_EXPIRY = process.env.JWT_EXPIRY || '7d';
 
 /**
@@ -22,7 +32,7 @@ const JWT_EXPIRY = process.env.JWT_EXPIRY || '7d';
  */
 function generateToken(userId) {
     if (!userId) {
-        userId = `user-${crypto.randomBytes(6).toString('hex')}`;
+        userId = `user-${crypto.randomBytes(8).toString('hex')}`;
     }
     const token = jwt.sign({userId}, JWT_SECRET, {expiresIn: JWT_EXPIRY});
     return {token, userId};
@@ -43,13 +53,11 @@ function verifyToken(token) {
 /**
  * Express middleware — extracts userId from JWT
  * 
- * Behavior:
- * - If valid Authorization header: uses the userId from token
- * - If no token: falls back to body/query userId (backward compatible)
- * - Attaches req.userId for downstream use
+ * S3 fix: When a valid token exists, always use token's userId (ignore body/query).
+ * When no token exists, auto-provision a session (backward compatible).
+ * This prevents userId spoofing via body/query params.
  */
 function authMiddleware(req, res, next) {
-    // Try to extract token from Authorization header
     const authHeader = req.headers.authorization;
     
     if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -57,26 +65,31 @@ function authMiddleware(req, res, next) {
         const decoded = verifyToken(token);
 
         if (decoded && decoded.userId) {
+            // S5 fix: Token userId takes precedence — ignore any userId in body/query
             req.userId = decoded.userId;
             req.authenticated = true;
             return next();
         }
 
-        // Token exists but is invalid/expired
-        logger.warn('Invalid or expired JWT token');
+        // Token exists but is invalid/expired — reject instead of falling through
+        logger.warn('Invalid or expired JWT token — rejecting request');
+        return res.status(401).json({error: 'Invalid or expired token. Please re-authenticate.'});
     }
 
-    // Fallback: use userId from body or query (backward compatible)
-    // This ensures existing functionality doesn't break
-    req.userId = req.body?.userId || req.query?.userId || 'user-123';
+    // No token provided: auto-provision a session for backward compatibility
+    // Generate a proper unique userId instead of using a shared default
+    const session = generateToken();
+    req.userId = session.userId;
     req.authenticated = false;
+    req.newSessionToken = session.token; // Routes can return this to the client
+    logger.debug(`Auto-provisioned session for ${req.userId}`);
     next();
 }
 
+// S2 fix: Do NOT export JWT_SECRET — only export the functions that use it
 module.exports = {
     generateToken,
     verifyToken,
     authMiddleware,
-    JWT_SECRET,
     JWT_EXPIRY
 };

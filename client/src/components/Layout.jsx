@@ -44,19 +44,20 @@ const navItems = [
     {path: '/app/analytics', icon: BarChart3, label: 'Analytics'},
 ];
 
-// Export/Import functions (kept from original)
+// Allowed keys for import/export — prevents arbitrary localStorage writes
+const ALLOWED_DATA_KEYS = new Set([
+    'flashcardDecks', 'habits', 'gradeCourses', 'targetGPA',
+    'resourceLibrary', 'resourceFolders', 'notes', 'moodEntries',
+    'deadlines', 'pomodoroStats', 'chatHistory', 'timetable',
+    'exams', 'schedule', 'focusModeSettings', 'focusTodaySessions',
+    'theme'
+]);
+
+// Export/Import functions
 const exportAllData = (toast) => {
     try {
         const data = {};
-        const keys = [
-            'flashcardDecks', 'habits', 'gradeCourses', 'targetGPA',
-            'resourceLibrary', 'resourceFolders', 'notes', 'moodEntries',
-            'deadlines', 'pomodoroStats', 'chatHistory', 'timetable',
-            'exams', 'schedule', 'focusModeSettings', 'focusTodaySessions',
-            'theme'
-        ];
-
-        keys.forEach(key => {
+        for (const key of ALLOWED_DATA_KEYS) {
             const value = localStorage.getItem(key);
             if (value) {
                 try {
@@ -65,7 +66,7 @@ const exportAllData = (toast) => {
                     data[key] = value;
                 }
             }
-        });
+        }
 
         const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
         const url = URL.createObjectURL(blob);
@@ -90,14 +91,37 @@ const importData = (toast) => {
         const file = e.target.files[0];
         if (!file) return;
 
+        // S9 fix: Reject suspiciously large files (>5 MB)
+        if (file.size > 5 * 1024 * 1024) {
+            toast.error('Backup file is too large (max 5 MB)');
+            return;
+        }
+
         const reader = new FileReader();
         reader.onload = (event) => {
             try {
                 const data = JSON.parse(event.target.result);
-                Object.entries(data).forEach(([key, value]) => {
-                    localStorage.setItem(key, JSON.stringify(value));
-                });
-                toast.success('Data imported! Refreshing...');
+
+                if (typeof data !== 'object' || Array.isArray(data)) {
+                    toast.error('Invalid backup file format');
+                    return;
+                }
+
+                // S9 fix: Only import whitelisted keys
+                let importedCount = 0;
+                for (const [key, value] of Object.entries(data)) {
+                    if (ALLOWED_DATA_KEYS.has(key)) {
+                        localStorage.setItem(key, JSON.stringify(value));
+                        importedCount++;
+                    }
+                }
+
+                if (importedCount === 0) {
+                    toast.error('No valid data found in backup file');
+                    return;
+                }
+
+                toast.success(`Imported ${importedCount} items! Refreshing...`);
                 setTimeout(() => window.location.reload(), 1500);
             } catch (error) {
                 toast.error('Invalid backup file');
@@ -161,7 +185,7 @@ const Layout = () => {
                         {sidebarOpen && (
                             <div className="flex-1 min-w-0">
                                 <p className="text-sm font-semibold text-white truncate">Student User</p>
-                                <p className="text-xs text-gray-400 truncate">Pro Plan</p>
+                                <p className="text-xs text-gray-400 truncate">Free Plan</p>
                             </div>
                         )}
                         {sidebarOpen && <Settings size={18} className="text-gray-400 cursor-pointer hover:text-white" />}

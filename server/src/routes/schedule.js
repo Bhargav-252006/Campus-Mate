@@ -8,7 +8,7 @@ const logger = require('../utils/logger');
 
 router.get('/', (req, res) => {
     try {
-        const userId = req.query.userId || 'user-123';
+        const userId = req.userId;
         const schedule = scheduleStore.getAll(userId);
         res.json(schedule);
     } catch (error) {
@@ -19,11 +19,12 @@ router.get('/', (req, res) => {
 
 router.post('/', (req, res) => {
     try {
-        const {userId, ...task} = req.body;
+        const userId = req.userId;
+        const task = req.body;
         if (!task.task) {
             return res.status(400).json({error: 'Task description is required'});
         }
-        const newTask = scheduleStore.add(userId || 'user-123', task);
+        const newTask = scheduleStore.add(userId, task);
         res.status(201).json(newTask);
     } catch (error) {
         logger.error('Error adding task', error);
@@ -34,8 +35,9 @@ router.post('/', (req, res) => {
 router.put('/:id', (req, res) => {
     try {
         const {id} = req.params;
-        const {userId, ...updates} = req.body;
-        const updated = scheduleStore.update(userId || 'user-123', id, updates);
+        const userId = req.userId;
+        const updates = req.body;
+        const updated = scheduleStore.update(userId, id, updates);
         if (updated) {
             res.json(updated);
         } else {
@@ -50,7 +52,7 @@ router.put('/:id', (req, res) => {
 router.delete('/:id', (req, res) => {
     try {
         const {id} = req.params;
-        const userId = req.query.userId || 'user-123';
+        const userId = req.userId;
         const deleted = scheduleStore.delete(userId, id);
         if (deleted) {
             res.json({success: true});

@@ -1,11 +1,13 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const apiRoutes = require('./routes/api');
 const logger = require('./utils/logger');
 const {sanitizeMiddleware} = require('./utils/inputSanitizer');
 const memoryManager = require('./utils/memoryManagerV3');
+const progressLedger = require('./utils/progressLedger');
 const n8nBridge = require('./integrations/n8nBridge');
 
 const app = express();
@@ -46,6 +48,10 @@ const origins = [...new Set([...defaultOrigins, ...allowedOrigins])];
 app.use(cors({
     origin: origins,
     credentials: true
+}));
+app.use(helmet({
+    contentSecurityPolicy: false, // CSP managed by frontend/proxy
+    crossOriginEmbedderPolicy: false // Allow cross-origin resources
 }));
 app.use(express.json({limit: '10mb'}));
 
@@ -137,6 +143,11 @@ const gracefulShutdown = (signal) => {
     } catch (err) {
         logger.error('Error flushing memory on shutdown', err);
     }
+
+    // P8 fix: Clean up intervals
+    try {
+        progressLedger.stopAutoCleanup();
+    } catch (_) { /* ignore */ }
 
     // Close HTTP server
     server.close(() => {

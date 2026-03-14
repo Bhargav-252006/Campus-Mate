@@ -8,7 +8,7 @@ const logger = require('../utils/logger');
 
 router.get('/', (req, res) => {
     try {
-        const userId = req.query.userId || 'user-123';
+        const userId = req.userId;
         const timetable = timetableStore.getAll(userId);
         res.json(timetable);
     } catch (error) {
@@ -19,11 +19,12 @@ router.get('/', (req, res) => {
 
 router.post('/', (req, res) => {
     try {
-        const {userId, ...entry} = req.body;
+        const userId = req.userId;
+        const entry = req.body;
         if (!entry.subject || !entry.day) {
             return res.status(400).json({error: 'Subject and day are required'});
         }
-        const newEntry = timetableStore.add(userId || 'user-123', entry);
+        const newEntry = timetableStore.add(userId, entry);
         res.status(201).json(newEntry);
     } catch (error) {
         logger.error('Error adding timetable entry', error);
@@ -34,8 +35,9 @@ router.post('/', (req, res) => {
 router.put('/:id', (req, res) => {
     try {
         const {id} = req.params;
-        const {userId, ...updates} = req.body;
-        const updated = timetableStore.update(userId || 'user-123', id, updates);
+        const userId = req.userId;
+        const updates = req.body;
+        const updated = timetableStore.update(userId, id, updates);
         if (updated) {
             res.json(updated);
         } else {
@@ -50,7 +52,7 @@ router.put('/:id', (req, res) => {
 router.delete('/:id', (req, res) => {
     try {
         const {id} = req.params;
-        const userId = req.query.userId || 'user-123';
+        const userId = req.userId;
         const deleted = timetableStore.delete(userId, id);
         if (deleted) {
             res.json({success: true});

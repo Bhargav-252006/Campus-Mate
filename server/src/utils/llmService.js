@@ -26,6 +26,10 @@ const DEEPSEEK_HEAVY_MODEL = process.env.DEEPSEEK_HEAVY_MODEL || 'deepseek-reaso
 const STRUCTURED_TASK_TYPES = new Set(['classification', 'routing', 'summarization', 'evaluation']);
 const HEAVY_REASONING_TASK_TYPES = new Set(['heavy_reasoning', 'analysis']);
 
+// P4 fix: Cache these at module level to avoid require() in hot path
+let llmTraceEnabled = null;
+let statsRepoRef = null;
+
 const selectGeminiModel = (taskType) => (
     STRUCTURED_TASK_TYPES.has(taskType) ? config.gemini.routingModel : config.gemini.model
 );
@@ -279,12 +283,20 @@ const callLLM = async (systemPrompt, userMessage, options = {}, conversationHist
 
     const latency = Date.now() - startTime;
 
-    // LLM trace logging
-    try {
-        const features = require('../config/features');
-        if (features.ENABLE_LLM_TRACING) {
-            const {statsRepo} = require('../repositories');
-            statsRepo.addTrace({
+    // LLM trace logging (P4 fix: moved requires to top-level lazy-loaded refs)
+    if (llmTraceEnabled === null) {
+        try {
+            const features = require('../config/features');
+            llmTraceEnabled = !!features.ENABLE_LLM_TRACING;
+        } catch (_) { llmTraceEnabled = false; }
+    }
+    if (llmTraceEnabled) {
+        try {
+            if (!statsRepoRef) {
+                const {statsRepo} = require('../repositories');
+                statsRepoRef = statsRepo;
+            }
+            statsRepoRef.addTrace({
                 type: 'llm_call',
                 provider: usedProvider || 'none',
                 model: activeModel,
@@ -294,8 +306,8 @@ const callLLM = async (systemPrompt, userMessage, options = {}, conversationHist
                 latencyMs: latency,
                 success: !!result,
             }).catch(() => { });
-        }
-    } catch (_) { /* config not loaded yet on first call — ignore */}
+        } catch (_) { /* statsRepo not available */ }
+    }
 
     if (!result) {
         logger.warn('All providers (local + cloud) unavailable — returning null');

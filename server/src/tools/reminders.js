@@ -48,7 +48,13 @@ function deleteReminder({reminderId}, userId) {
     return {success: true, message: `Deleted reminder: "${deleted.title}"`};
 }
 
-// Expose data ref for cross-tool use (getTodaysTasks)
-function _getData() {return reminders;}
+// E5 fix: Return a shallow copy to prevent external mutation of internal state
+function _getData() {
+    const copy = {};
+    for (const userId of Object.keys(reminders)) {
+        copy[userId] = [...reminders[userId]];
+    }
+    return copy;
+}
 
 module.exports = {setReminder, getReminders, deleteReminder, _getData};

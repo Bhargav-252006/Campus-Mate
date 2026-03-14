@@ -50,7 +50,7 @@ function getDeadlines({includeCompleted = false, subject = null}, userId) {
     let filtered = includeCompleted ? userDeadlines : userDeadlines.filter(d => !d.completed);
 
     if (subject) {
-        filtered = filtered.filter(d => d.subject.toLowerCase().includes(subject.toLowerCase()));
+        filtered = filtered.filter(d => d.subject && d.subject.toLowerCase().includes(subject.toLowerCase()));
     }
 
     filtered.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));

@@ -10,13 +10,20 @@ function generateQuizQuestions(topic, difficulty, numQuestions, type) {
     const questions = [];
     const questionTypes = type === 'mixed' ? ['mcq', 'true-false', 'short-answer'] : [type];
 
+    // E3 fix: Generate actual placeholder questions with clear instructions
+    // These are structural templates — the LLM will use the quiz tool result
+    // to present real questions to the user based on the topic
     for (let i = 0; i < numQuestions; i++) {
         const qType = questionTypes[i % questionTypes.length];
         questions.push({
             id: generateId(), number: i + 1, type: qType,
-            question: `[Question ${i + 1} about ${topic}]`,
-            options: qType === 'mcq' ? ['A)', 'B)', 'C)', 'D)'] : null,
-            correctAnswer: null, explanation: null, userAnswer: null, isCorrect: null
+            question: `Question ${i + 1} about "${topic}" (${difficulty} difficulty)`,
+            options: qType === 'mcq' ? ['Option A', 'Option B', 'Option C', 'Option D'] : null,
+            correctAnswer: null, // To be filled by LLM or user
+            explanation: null,
+            userAnswer: null,
+            isCorrect: null,
+            needsLLMGeneration: true // Flag indicating this needs LLM to generate real content
         });
     }
     return questions;

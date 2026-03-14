@@ -25,6 +25,7 @@
  */
 
 const fs = require('fs');
+const fsPromises = fs.promises;
 const path = require('path');
 const logger = require('./logger');
 const {callLLM} = require('./llmService');
@@ -178,7 +179,6 @@ class MemoryManagerV3 {
             }, null, 2);
 
             // Use async writes to avoid blocking the event loop
-            const fsPromises = require('fs').promises;
             Promise.all([
                 fsPromises.writeFile(MEMORY_FILE, memoryData),
                 fsPromises.writeFile(PROFILES_FILE, profileData)
@@ -576,12 +576,21 @@ class MemoryManagerV3 {
     }
 
     trimEpisodicMemory(userId) {
-        // Keep total episodic memory under limit
-        // Cache stringified length to avoid repeated serialization in loop
-        while (this.episodicMemory[userId].length > 1) {
-            const totalLength = JSON.stringify(this.episodicMemory[userId]).length;
-            if (totalLength <= CONFIG.MAX_EPISODIC_LENGTH) break;
-            this.episodicMemory[userId].shift();
+        // P3 fix: Avoid repeated JSON.stringify in loop (was O(n^2))
+        // Estimate size by summing individual entry sizes instead
+        const episodes = this.episodicMemory[userId];
+        if (!episodes || episodes.length <= 1) return;
+
+        let totalLength = 0;
+        const entrySizes = episodes.map(e => {
+            const size = JSON.stringify(e).length;
+            totalLength += size;
+            return size;
+        });
+
+        while (totalLength > CONFIG.MAX_EPISODIC_LENGTH && episodes.length > 1) {
+            totalLength -= entrySizes.shift();
+            episodes.shift();
         }
     }
 

@@ -49,7 +49,9 @@ async function webSearch({query, maxResults = 5}, userId) {
                         }
                     }
                 }
-            } catch (_) { /* Wikipedia fallback failed silently */ }
+            } catch (wikiErr) {
+                logger.warn('Wikipedia fallback search failed', wikiErr.message || wikiErr);
+            }
         }
 
         if (results.length === 0) {

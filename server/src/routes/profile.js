@@ -10,7 +10,7 @@ const logger = require('../utils/logger');
 // Get user profile
 router.get('/profile', (req, res) => {
     try {
-        const userId = req.query.userId || 'user-123';
+        const userId = req.userId;
         const profile = memoryManager.getProfile(userId);
         const isNewUser = !profile.name && profile.subjects?.length === 0;
         res.json({
@@ -26,10 +26,10 @@ router.get('/profile', (req, res) => {
 // Update user profile
 router.put('/profile', (req, res) => {
     try {
-        const {userId, ...updates} = req.body;
-        const actualUserId = userId || 'user-123';
-        memoryManager.updateProfile(actualUserId, updates);
-        logger.info(`Profile updated for ${actualUserId}`);
+        const userId = req.userId;
+        const updates = req.body;
+        memoryManager.updateProfile(userId, updates);
+        logger.info(`Profile updated for ${userId}`);
         res.json({success: true, message: 'Profile updated!'});
     } catch (error) {
         logger.error('Error updating profile', error);
@@ -40,7 +40,7 @@ router.put('/profile', (req, res) => {
 // Export all user data
 router.get('/memory/export', (req, res) => {
     try {
-        const userId = req.query.userId || 'user-123';
+        const userId = req.userId;
         const data = memoryManager.exportUserData(userId);
         res.json(data);
     } catch (error) {
@@ -52,7 +52,7 @@ router.get('/memory/export', (req, res) => {
 // Clear conversation memory (keep profile)
 router.delete('/memory/conversations', (req, res) => {
     try {
-        const userId = req.query.userId || 'user-123';
+        const userId = req.userId;
         memoryManager.clearConversation(userId);
         logger.info(`Conversations cleared for ${userId}`);
         res.json({success: true, message: 'Conversations cleared, profile kept!'});
@@ -65,7 +65,7 @@ router.delete('/memory/conversations', (req, res) => {
 // Clear ALL data including profile
 router.delete('/memory/all', (req, res) => {
     try {
-        const userId = req.query.userId || 'user-123';
+        const userId = req.userId;
         memoryManager.clearAll(userId);
         logger.info(`All data cleared for ${userId}`);
         res.json({success: true, message: 'All data cleared!'});
