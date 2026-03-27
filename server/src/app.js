@@ -8,7 +8,6 @@ const logger = require('./utils/logger');
 const {sanitizeMiddleware} = require('./utils/inputSanitizer');
 const memoryManager = require('./utils/memoryManagerV3');
 const progressLedger = require('./utils/progressLedger');
-const n8nBridge = require('./integrations/n8nBridge');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -50,8 +49,23 @@ app.use(cors({
     credentials: true
 }));
 app.use(helmet({
-    contentSecurityPolicy: false, // CSP managed by frontend/proxy
-    crossOriginEmbedderPolicy: false // Allow cross-origin resources
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            fontSrc: ["'self'", "https://fonts.gstatic.com"],
+            imgSrc: ["'self'", "data:", "blob:"],
+            connectSrc: [
+                "'self'",
+                process.env.VITE_API_URL || 'http://localhost:3000'
+            ],
+            frameSrc: ["'none'"],
+            objectSrc: ["'none'"],
+            upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null,
+        }
+    },
+    crossOriginEmbedderPolicy: false // allow cross-origin resources (e.g. fonts)
 }));
 app.use(express.json({limit: '10mb'}));
 
@@ -80,8 +94,9 @@ app.use((req, res, next) => {
     next();
 });
 
-// Routes - with chat-specific rate limiting
-app.use('/api/chat', chatLimiter);
+// Routes - chat rate limiter only on POST (sending messages),
+// not on GET /history which is polled frequently by the client.
+app.post('/api/chat', chatLimiter);
 app.use('/api', apiRoutes);
 
 // Health Check
@@ -97,8 +112,7 @@ app.get('/', (req, res) => {
             schedule: '/api/schedule',
             profile: '/api/profile',
             memory: '/api/memory/export',
-            stats: '/api/stats/traces',
-            webhooks: '/api/webhooks/n8n'
+            stats: '/api/stats/traces'
         }
     });
 });
@@ -126,9 +140,6 @@ const server = app.listen(PORT, () => {
     logger.info(`CORS origins: ${origins.join(', ')}`);
     logger.info('Logs are saved to: server/logs/');
 
-    // Boot integrations
-    n8nBridge.start();
-
     logger.separator();
 });
 
@@ -147,7 +158,7 @@ const gracefulShutdown = (signal) => {
     // P8 fix: Clean up intervals
     try {
         progressLedger.stopAutoCleanup();
-    } catch (_) { /* ignore */ }
+    } catch (_) { /* ignore */}
 
     // Close HTTP server
     server.close(() => {

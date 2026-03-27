@@ -1,6 +1,6 @@
 import React, {useState, useEffect, useRef} from 'react';
 import {Send, Mic, MicOff, Volume2, VolumeX, Trash2, Bot} from 'lucide-react';
-import {sendMessageToAgent, getChatHistory, clearChatHistory} from '../services/api';
+import {sendMessageToAgent, getChatHistory, clearChatHistory, getSessionUserId} from '../services/api';
 import ReactMarkdown from 'react-markdown';
 
 // Emoji regex extracted as a constant to avoid duplication
@@ -13,6 +13,7 @@ const buildMessageId = (prefix = 'msg') => `${prefix}_${Date.now()}_${++messageI
 
 const CHAT_PENDING_STORAGE_KEY = 'campusMate_pending_chat_requests';
 const PENDING_HISTORY_POLL_MS = 2000;
+const PENDING_REQUEST_TTL_MS = 2 * 60 * 1000;
 
 const getMessageTimestamp = (message) => message?.timestamp || message?.createdAt || new Date().toISOString();
 
@@ -26,12 +27,30 @@ const buildMessageIdentity = (message) => {
 
 const mergeUniqueMessages = (...messageGroups) => {
     const mergedMessages = new Map();
+    const dedupeWindowMs = 10000;
 
     messageGroups
         .flat()
         .filter(Boolean)
         .sort((left, right) => new Date(getMessageTimestamp(left)) - new Date(getMessageTimestamp(right)))
         .forEach((message) => {
+            // Collapse optimistic + persisted duplicates when they have same sender/text
+            // and are created close together (local UI id/timestamp may differ from DB records).
+            const hasNearDuplicate = Array.from(mergedMessages.values()).some((existingMessage) => {
+                if (existingMessage.sender !== message.sender) return false;
+                if ((existingMessage.text || '') !== (message.text || '')) return false;
+
+                const existingTime = new Date(getMessageTimestamp(existingMessage)).getTime();
+                const nextTime = new Date(getMessageTimestamp(message)).getTime();
+                if (Number.isNaN(existingTime) || Number.isNaN(nextTime)) return false;
+
+                return Math.abs(existingTime - nextTime) <= dedupeWindowMs;
+            });
+
+            if (hasNearDuplicate) {
+                return;
+            }
+
             mergedMessages.set(buildMessageIdentity(message), {
                 ...message,
                 timestamp: getMessageTimestamp(message)
@@ -47,7 +66,24 @@ const readPendingRequests = () => {
         if (!rawValue) return [];
 
         const parsedValue = JSON.parse(rawValue);
-        return Array.isArray(parsedValue) ? parsedValue : [];
+        if (!Array.isArray(parsedValue)) return [];
+
+        const now = Date.now();
+        const filteredEntries = parsedValue.filter((entry) => {
+            if (!entry?.clientRequestId || !entry?.userId) return false;
+
+            const createdAtMs = new Date(entry.createdAt || 0).getTime();
+            if (!createdAtMs || Number.isNaN(createdAtMs)) return false;
+
+            return now - createdAtMs < PENDING_REQUEST_TTL_MS;
+        });
+
+        // Keep localStorage clean from stale pending records.
+        if (filteredEntries.length !== parsedValue.length) {
+            writePendingRequests(filteredEntries);
+        }
+
+        return filteredEntries;
     } catch (error) {
         console.error('Failed to parse pending chat requests:', error);
         return [];
@@ -106,25 +142,15 @@ const Chat = () => {
     const pendingPollRef = useRef(null);
     const isMountedRef = useRef(true);
 
-    // Generate or retrieve userId for this device/browser
-    const getUserId = () => {
-        let storedUserId = localStorage.getItem('student_mate_userId');
-        if (!storedUserId) {
-            // Generate unique ID: timestamp + random string
-            storedUserId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
-            localStorage.setItem('student_mate_userId', storedUserId);
-            console.log('New user ID generated:', storedUserId);
-        }
-        return storedUserId;
-    };
-
     useEffect(() => {
-        // Get or generate userId
-        const id = getUserId();
+        // Reuse the shared session identity so chat history stays on the same account.
+        const id = getSessionUserId() || null;
         setUserId(id);
 
-        // Load chat history
-        loadChatHistory(id);
+        if (id) {
+            // Load chat history for the current persistent session.
+            loadChatHistory(id);
+        }
 
         // Load available voices
         const loadVoices = () => {
@@ -198,19 +224,20 @@ const Chat = () => {
             return hasPersistedUserMessage ? [] : [entry.userMessage];
         });
 
-        const mergedMessages = mergeUniqueMessages(normalizedHistory, pendingMessages);
+        setMessages((previousMessages) => {
+            const mergedMessages = mergeUniqueMessages(previousMessages, normalizedHistory, pendingMessages);
 
-        if (mergedMessages.length > 0) {
-            setMessages(mergedMessages);
-            return;
-        }
+            if (mergedMessages.length > 0) {
+                return mergedMessages;
+            }
 
-        setMessages([{
-            id: 'welcome',
-            sender: 'bot',
-            text: "Hello! 👋 I'm your Campus Mate assistant. I can help you with:\n\n• 📚 Academic questions & explanations\n• 😊 Emotional support & motivation\n• 🧠 Cognitive load management\n• 📊 Study strategies & failure patterns\n\nHow can I help you today?",
-            timestamp: new Date().toISOString()
-        }]);
+            return [{
+                id: 'welcome',
+                sender: 'bot',
+                text: "Hello! 👋 I'm your Campus Mate assistant. I can help you with:\n\n• 📚 Academic questions & explanations\n• 😊 Emotional support & motivation\n• 🧠 Cognitive load management\n• 📊 Study strategies & failure patterns\n\nHow can I help you today?",
+                timestamp: new Date().toISOString()
+            }];
+        });
     };
 
     const stopPendingHistoryPolling = () => {

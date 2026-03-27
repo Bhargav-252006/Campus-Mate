@@ -193,6 +193,45 @@ function getToolsPromptForAgent(agentType) {
 }
 
 /**
+ * Direct Gemini API call with full message array support.
+ *
+ * A6 fix: Extracted from inline fetch() inside handleNativeToolCalls so the
+ * Gemini coupling is in one place instead of scattered.
+ *
+ * NOTE: callLLM() cannot be used here because it only accepts
+ * (systemPrompt, userMessage) — it doesn't support multi-turn message
+ * arrays with tool_call / tool roles needed for function-calling follow-ups.
+ */
+async function _callGeminiDirect(messages, options = {}) {
+    const body = {
+        model: options.model || 'gemini-2.5-flash',
+        messages,
+        max_tokens: options.maxTokens || 800,
+        temperature: options.temperature || 0.7
+    };
+    if (body.model.startsWith('gemini-2.5')) {
+        body.reasoning_effort = 'low';
+    }
+
+    const response = await fetch(`${llmConfig.gemini.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${llmConfig.gemini.apiKey}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(30000) // 30s timeout
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Gemini API Error (${response.status}): ${errorText}`);
+    }
+
+    return response.json();
+}
+
+/**
  * Handle native Gemini function calling results.
  * Detects `__toolCalls` JSON from callLLM, executes tools, then does
  * a follow-up LLM call with tool results (up to 3 iterations).
@@ -256,32 +295,12 @@ async function handleNativeToolCalls(responseText, userId, systemPrompt, userMes
         delete followUpOptions.toolSchemas;
 
         try {
-            const body = {
-                model: model || options.model || 'gemini-2.5-flash',
-                messages,
-                max_tokens: followUpOptions.maxTokens,
+            const data = await _callGeminiDirect(messages, {
+                model: model || options.model,
+                maxTokens: followUpOptions.maxTokens,
                 temperature: followUpOptions.temperature || 0.7
-            };
-            if (body.model.startsWith('gemini-2.5')) {
-                body.reasoning_effort = 'low';
-            }
-
-            const response = await fetch(`${llmConfig.gemini.baseUrl}/chat/completions`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${llmConfig.gemini.apiKey}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(body)
             });
 
-            if (!response.ok) {
-                const errorText = await response.text();
-                logger.error(`Gemini follow-up API Error (${response.status})`, new Error(errorText));
-                break;
-            }
-
-            const data = await response.json();
             const choice = data?.choices?.[0]?.message;
 
             // If the model wants to call more tools, loop
@@ -317,47 +336,26 @@ async function handleNativeToolCalls(responseText, userId, systemPrompt, userMes
 /**
  * Parse [TOOL_CALL: ...] markers from LLM response, execute them,
  * and replace each marker with the tool result.
+ *
+ * A5 fix: Delegates parsing to toolCallParser instead of duplicating regex logic.
  */
 async function parseAndExecuteToolCalls(responseText, userId) {
-    const toolCallPattern = /\[TOOL_CALL:\s*(\w+)\(([^)]*)\)\]/g;
-    let match;
+    const {toolCalls} = parseToolCalls(responseText);
+    if (toolCalls.length === 0) return {text: responseText, toolsExecuted: []};
+
     let processedText = responseText;
     const toolsExecuted = [];
 
-    const matches = [];
-    while ((match = toolCallPattern.exec(responseText)) !== null) {
-        matches.push({full: match[0], toolName: match[1], rawParams: match[2]});
-    }
-
-    if (matches.length === 0) return {text: responseText, toolsExecuted: []};
-
-    for (const m of matches) {
-        const {full, toolName, rawParams} = m;
-        logger.info(`🔧 Parsing TOOL_CALL: ${toolName}(${rawParams})`);
-
-        const params = {};
-        const paramPattern = /(\w+)\s*=\s*(?:"([^"]*)"|([\w.-]+))/g;
-        let pm;
-        while ((pm = paramPattern.exec(rawParams)) !== null) {
-            const key = pm[1];
-            const val = pm[2] !== undefined ? pm[2] : pm[3];
-            params[key] = isNaN(val) ? val : Number(val);
-        }
+    for (const {full, toolName, params} of toolCalls) {
+        logger.info(`🔧 Parsing TOOL_CALL: ${toolName}(${JSON.stringify(params)})`);
 
         const result = await toolService.executeTool({name: toolName, args: params, userId});
         toolsExecuted.push({tool: toolName, params, success: result.success});
 
         if (result.success) {
             logger.info(`✅ Tool ${toolName} executed successfully`);
-            let resultText = '';
             const r = result.result;
-            if (typeof r === 'string') {
-                resultText = r;
-            } else if (r && r.message) {
-                resultText = r.message;
-            } else if (r) {
-                resultText = JSON.stringify(r, null, 2);
-            }
+            const resultText = typeof r === 'string' ? r : (r?.message || JSON.stringify(r, null, 2));
             processedText = processedText.replace(full, resultText);
         } else {
             logger.warn(`❌ Tool ${toolName} failed: ${result.error}`);

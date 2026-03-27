@@ -19,7 +19,7 @@ const GEMINI_ROUTING_MODEL = process.env.GEMINI_ROUTING_MODEL || 'gemini-2.5-fla
 const SINGLE_MODEL = 'meta-llama/Meta-Llama-3.1-8B-Instruct';       // Bytez ID (cloud fallback)
 const HF_MODEL = 'meta-llama/Llama-3.1-8B-Instruct';                // HuggingFace ID (cloud fallback)
 const OR_MODEL = 'meta-llama/llama-3.1-8b-instruct:free';           // OpenRouter free tier (cloud fallback)
-const OR_HEAVY_REASONING_MODEL = process.env.OPENROUTER_HEAVY_REASONING_MODEL || 'deepseek/deepseek-r1-0528:free';
+const OR_HEAVY_REASONING_MODEL = process.env.OPENROUTER_HEAVY_REASONING_MODEL || 'nvidia/nemotron-3-super-120b-a12b:free';
 const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
 const DEEPSEEK_HEAVY_MODEL = process.env.DEEPSEEK_HEAVY_MODEL || 'deepseek-reasoner';
 
@@ -191,12 +191,14 @@ const callLLM = async (systemPrompt, userMessage, options = {}, conversationHist
     let usedProvider = null;
     let result = null;
 
+    const isProviderOpenRouter = config.provider === 'openrouter';
+
     // 0️⃣ Try DeepSeek for heavy reasoning tasks (always, regardless of provider)
     if (!result && isHeavyTask && config.deepseek?.apiKey) {
         logger.llm('DeepSeek', 'attempting', `Calling ${config.deepseek.heavyModel} for heavy task...`);
         result = await callDeepSeek(systemPrompt, userMessage, {...options, model: config.deepseek.heavyModel}, conversationHistory);
-        if (result) { usedProvider = 'deepseek'; }
-        else { logger.warn('DeepSeek heavy reasoning failed — falling back'); }
+        if (result) {usedProvider = 'deepseek';}
+        else {logger.warn('DeepSeek heavy reasoning failed — falling back');}
     }
 
     // 1️⃣ Try Ollama (local — fastest, free, no rate limits)
@@ -222,10 +224,25 @@ const callLLM = async (systemPrompt, userMessage, options = {}, conversationHist
         }
     }
 
+    // 1.6️⃣ If OpenRouter is selected as primary provider, try it before Gemini/other cloud fallbacks.
+    if (!result && isProviderOpenRouter && config.openrouter.apiKey) {
+        const openRouterOptions = {
+            ...options,
+            model: options.model || selectOpenRouterModel(options.taskType)
+        };
+        logger.llm('OpenRouter', 'attempting', `Calling primary model ${openRouterOptions.model}...`);
+        result = await callOpenRouter(systemPrompt, userMessage, openRouterOptions, conversationHistory);
+        if (result) {
+            usedProvider = 'openrouter';
+        } else {
+            logger.warn('Primary OpenRouter call failed — falling back to other cloud providers');
+        }
+    }
+
     // 1.5️⃣ (DeepSeek for heavy tasks already handled in step 0)
 
     // 2️⃣ Try Gemini (cloud primary)
-    if (!result && config.gemini.apiKey) {
+    if (!result && config.gemini.apiKey && !isProviderOpenRouter) {
         const geminiOptions = {
             ...options,
             model: options.model || selectGeminiModel(options.taskType)
@@ -275,7 +292,7 @@ const callLLM = async (systemPrompt, userMessage, options = {}, conversationHist
     }
 
     // 5️⃣ Try OpenRouter (last fallback)
-    if (!result && config.openrouter.apiKey) {
+    if (!result && config.openrouter.apiKey && !isProviderOpenRouter) {
         logger.llm('OpenRouter', 'attempting', `Calling ${OR_MODEL}...`);
         result = await callOpenRouter(systemPrompt, userMessage, options, conversationHistory);
         if (result) {usedProvider = 'openrouter';}
@@ -288,7 +305,7 @@ const callLLM = async (systemPrompt, userMessage, options = {}, conversationHist
         try {
             const features = require('../config/features');
             llmTraceEnabled = !!features.ENABLE_LLM_TRACING;
-        } catch (_) { llmTraceEnabled = false; }
+        } catch (_) {llmTraceEnabled = false;}
     }
     if (llmTraceEnabled) {
         try {
@@ -306,7 +323,7 @@ const callLLM = async (systemPrompt, userMessage, options = {}, conversationHist
                 latencyMs: latency,
                 success: !!result,
             }).catch(() => { });
-        } catch (_) { /* statsRepo not available */ }
+        } catch (_) { /* statsRepo not available */}
     }
 
     if (!result) {
@@ -403,16 +420,10 @@ const callOllama = async (systemPrompt, userMessage, options = {}, conversationH
         const promptEvalCount = data?.prompt_eval_count || 0;
 
         logger.llm('Ollama', 'success', `Response in ${duration}ms from local ${model}`);
-
-        console.log(`\n${'='.repeat(70)}`);
-        console.log(`📊 OLLAMA LOCAL RESPONSE`);
-        console.log(`${'='.repeat(70)}`);
-        console.log(`🤖 Model: ${model} (LOCAL)`);
-        console.log(`📥 Prompt Tokens: ${promptEvalCount}`);
-        console.log(`📤 Response Tokens: ${evalCount}`);
-        console.log(`⏱️  Duration: ${duration}ms`);
-        console.log(`📝 Response Preview: ${content.trim().substring(0, 100)}...`);
-        console.log(`${'='.repeat(70)}\n`);
+        logger.debug('Ollama metrics', {
+            model, promptTokens: promptEvalCount,
+            responseTokens: evalCount, durationMs: duration
+        });
 
         return content.trim();
 
@@ -462,7 +473,8 @@ const callGemini = async (systemPrompt, userMessage, options = {}, conversationH
                 'Authorization': `Bearer ${config.gemini.apiKey}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(body)
+            body: JSON.stringify(body),
+            signal: AbortSignal.timeout(30000) // P10: 30s timeout for cloud API
         });
 
         if (!response.ok) {
@@ -482,20 +494,18 @@ const callGemini = async (systemPrompt, userMessage, options = {}, conversationH
 
         const usage = data?.usage || {};
         logger.llm('Gemini', 'success', `Response in ${duration}ms from ${model}`);
-
-        console.log(`\n${'='.repeat(70)}`);
-        console.log(`📊 GEMINI RESPONSE`);
-        console.log(`${'='.repeat(70)}`);
-        console.log(`🤖 Model: ${model}`);
-        console.log(`📥 Input Tokens: ${usage.prompt_tokens || 0}`);
-        console.log(`📤 Output Tokens: ${usage.completion_tokens || 0}`);
-        console.log(`⏱️  Duration: ${duration}ms`);
-        console.log(`📝 Response Preview: ${content.trim().substring(0, 100)}...`);
-        console.log(`${'='.repeat(70)}\n`);
+        logger.debug(`Gemini metrics`, {
+            model, inputTokens: usage.prompt_tokens || 0,
+            outputTokens: usage.completion_tokens || 0, durationMs: duration
+        });
 
         return content.trim();
     } catch (error) {
-        logger.error('Gemini request failed', error);
+        if (error.name === 'TimeoutError') {
+            logger.warn('Gemini request timed out (30s)');
+        } else {
+            logger.error('Gemini request failed', error);
+        }
         return null;
     }
 };
@@ -539,7 +549,8 @@ const callGeminiWithTools = async (systemPrompt, userMessage, options = {}, conv
                 'Authorization': `Bearer ${config.gemini.apiKey}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(body)
+            body: JSON.stringify(body),
+            signal: AbortSignal.timeout(30000) // P10: 30s timeout for cloud API
         });
 
         if (!response.ok) {
@@ -553,13 +564,10 @@ const callGeminiWithTools = async (systemPrompt, userMessage, options = {}, conv
         const choice = data?.choices?.[0]?.message;
         const usage = data?.usage || {};
 
-        console.log(`\n${'='.repeat(70)}`);
-        console.log(`🔧 GEMINI FUNCTION CALLING RESPONSE`);
-        console.log(`${'='.repeat(70)}`);
-        console.log(`🤖 Model: ${model}`);
-        console.log(`📥 Input Tokens: ${usage.prompt_tokens || 0}`);
-        console.log(`📤 Output Tokens: ${usage.completion_tokens || 0}`);
-        console.log(`⏱️  Duration: ${duration}ms`);
+        logger.debug('Gemini (tools) metrics', {
+            model, inputTokens: usage.prompt_tokens || 0,
+            outputTokens: usage.completion_tokens || 0, durationMs: duration
+        });
 
         if (choice?.tool_calls && choice.tool_calls.length > 0) {
             const toolCalls = choice.tool_calls.map(tc => ({
@@ -567,8 +575,7 @@ const callGeminiWithTools = async (systemPrompt, userMessage, options = {}, conv
                 name: tc.function.name,
                 args: JSON.parse(tc.function.arguments || '{}')
             }));
-            console.log(`🔧 Tool Calls: ${toolCalls.map(t => t.name).join(', ')}`);
-            console.log(`${'='.repeat(70)}\n`);
+            logger.llm('Gemini', 'success', `Tool calls: ${toolCalls.map(t => t.name).join(', ')} in ${duration}ms`);
             return {
                 type: 'tool_calls',
                 content: choice.content || '',
@@ -583,11 +590,14 @@ const callGeminiWithTools = async (systemPrompt, userMessage, options = {}, conv
             return null;
         }
 
-        console.log(`📝 Response Preview: ${content.trim().substring(0, 100)}...`);
-        console.log(`${'='.repeat(70)}\n`);
+        logger.llm('Gemini', 'success', `Response in ${duration}ms from ${model}`);
         return {type: 'text', content: content.trim(), toolCalls: [], model};
     } catch (error) {
-        logger.error('Gemini (tools) request failed', error);
+        if (error.name === 'TimeoutError') {
+            logger.warn('Gemini (tools) request timed out (30s)');
+        } else {
+            logger.error('Gemini (tools) request failed', error);
+        }
         return null;
     }
 };
@@ -623,7 +633,8 @@ const callDeepSeek = async (systemPrompt, userMessage, options = {}, conversatio
                 messages: cleanedMessages,
                 max_tokens: options.maxTokens || 500,
                 temperature: options.temperature || 0.7
-            })
+            }),
+            signal: AbortSignal.timeout(60000) // P10: 60s timeout — reasoning models are slow
         });
 
         if (!response.ok) {
@@ -649,20 +660,18 @@ const callDeepSeek = async (systemPrompt, userMessage, options = {}, conversatio
 
         const usage = data?.usage || {};
         logger.llm('DeepSeek', 'success', `Response in ${duration}ms from ${model}`);
-
-        console.log(`\n${'='.repeat(70)}`);
-        console.log(`📊 DEEPSEEK RESPONSE`);
-        console.log(`${'='.repeat(70)}`);
-        console.log(`🤖 Model: ${model}`);
-        console.log(`📥 Input Tokens: ${usage.prompt_tokens || 0}`);
-        console.log(`📤 Output Tokens: ${usage.completion_tokens || 0}`);
-        console.log(`⏱️  Duration: ${duration}ms`);
-        console.log(`📝 Response Preview: ${content.trim().substring(0, 100)}...`);
-        console.log(`${'='.repeat(70)}\n`);
+        logger.debug('DeepSeek metrics', {
+            model, inputTokens: usage.prompt_tokens || 0,
+            outputTokens: usage.completion_tokens || 0, durationMs: duration
+        });
 
         return content.trim();
     } catch (error) {
-        logger.error('DeepSeek request failed', error);
+        if (error.name === 'TimeoutError') {
+            logger.warn('DeepSeek request timed out (60s)');
+        } else {
+            logger.error('DeepSeek request failed', error);
+        }
         return null;
     }
 };
@@ -701,7 +710,8 @@ const callBytez = async (systemPrompt, userMessage, options = {}, conversationHi
                     messages: cleanedMessages,
                     max_tokens: options.maxTokens || 500,
                     temperature: options.temperature || 0.7
-                })
+                }),
+                signal: AbortSignal.timeout(30000) // P10: 30s timeout for cloud API
             });
 
             if (!response.ok) {
@@ -729,21 +739,19 @@ const callBytez = async (systemPrompt, userMessage, options = {}, conversationHi
 
             const usage = data?.usage || {};
             logger.llm('Bytez', 'success', `Response in ${duration}ms from ${model}`);
-
-            console.log(`\n${'='.repeat(70)}`);
-            console.log(`📊 BYTEZ RESPONSE`);
-            console.log(`${'='.repeat(70)}`);
-            console.log(`🤖 Model: ${model}`);
-            console.log(`📥 Input Tokens: ${usage.prompt_tokens || 0}`);
-            console.log(`📤 Output Tokens: ${usage.completion_tokens || 0}`);
-            console.log(`⏱️  Duration: ${duration}ms`);
-            console.log(`📝 Response Preview: ${content.trim().substring(0, 100)}...`);
-            console.log(`${'='.repeat(70)}\n`);
+            logger.debug('Bytez metrics', {
+                model, inputTokens: usage.prompt_tokens || 0,
+                outputTokens: usage.completion_tokens || 0, durationMs: duration
+            });
 
             return content.trim();
 
         } catch (error) {
-            logger.error('Bytez request failed', error);
+            if (error.name === 'TimeoutError') {
+                logger.warn('Bytez request timed out (30s)');
+            } else {
+                logger.error('Bytez request failed', error);
+            }
             return null;
         }
         break; // success — exit while loop
@@ -815,7 +823,8 @@ const callOpenRouter = async (systemPrompt, userMessage, options = {}, conversat
                     messages,
                     max_tokens: options.maxTokens || 500,
                     temperature: options.temperature || 0.7
-                })
+                }),
+                signal: AbortSignal.timeout(45000) // P10: 45s timeout (reasoning models can be slow)
             });
 
             if (!response.ok) {
@@ -872,24 +881,21 @@ const callOpenRouter = async (systemPrompt, userMessage, options = {}, conversat
             logger.llm('OpenRouter', 'success', `Response in ${duration}ms from ${modelUsed}`);
 
             if (isFallback) {
-                console.log(`\n✅ FALLBACK SUCCESS! Used ${modelUsed} instead of ${primaryModel}\n`);
+                logger.info(`Fallback success — used ${modelUsed} instead of ${primaryModel}`);
             }
 
-            console.log(`\n${'='.repeat(70)}`);
-            console.log(`📊 LLM RESPONSE METRICS`);
-            console.log(`${'='.repeat(70)}`);
-            console.log(`🤖 Model: ${modelUsed}`);
-            console.log(`📥 Input Tokens: ${inputTokens}`);
-            console.log(`📤 Output Tokens: ${outputTokens}`);
-            console.log(`📊 Total Tokens: ${totalTokens}`);
-            console.log(`⏱️  Duration: ${duration}ms`);
-            console.log(`📝 Response Preview: ${content.trim().substring(0, 100)}...`);
-            console.log(`${'='.repeat(70)}\n`);
+            logger.debug('OpenRouter metrics', {
+                model: modelUsed, inputTokens, outputTokens, totalTokens, durationMs: duration
+            });
 
             return content.trim();
 
         } catch (error) {
-            logger.error(`Error with model ${currentModel}:`, error);
+            if (error.name === 'TimeoutError') {
+                logger.warn(`OpenRouter request timed out (45s) for model ${currentModel}`);
+            } else {
+                logger.error(`Error with model ${currentModel}:`, error);
+            }
             lastError = {status: 'error', text: error.message, model: currentModel};
             // Try next fallback if available
             if (i < modelsToTry.length - 1) {
@@ -939,7 +945,8 @@ const callHuggingFace = async (systemPrompt, userMessage, options = {}) => {
                 messages: messages,
                 max_tokens: options.maxTokens || 500,
                 temperature: options.temperature || 0.7
-            })
+            }),
+            signal: AbortSignal.timeout(30000) // P10: 30s timeout for cloud API
         });
 
         if (!response.ok) {
@@ -960,19 +967,16 @@ const callHuggingFace = async (systemPrompt, userMessage, options = {}) => {
         }
 
         logger.llm('HuggingFace', 'success', `Response in ${duration}ms from ${model}`);
+        logger.debug('HuggingFace metrics', {model, durationMs: duration});
 
-        console.log(`\n${'='.repeat(70)}`);
-        console.log(`📊 HUGGING FACE RESPONSE`);
-        console.log(`${'='.repeat(70)}`);
-        console.log(`🤖 Model: ${model}`);
-        console.log(`⏱️  Duration: ${duration}ms`);
-        console.log(`📝 Response Preview: ${content.trim().substring(0, 100)}...`);
-        console.log(`${'='.repeat(70)}\n`);
-
-        return content.trim();  // ✅ FIX: was missing, causing all HF calls to return undefined
+        return content.trim();
 
     } catch (error) {
-        logger.error('HuggingFace request failed', error);
+        if (error.name === 'TimeoutError') {
+            logger.warn('HuggingFace request timed out (30s)');
+        } else {
+            logger.error('HuggingFace request failed', error);
+        }
         return null;
     }
 };

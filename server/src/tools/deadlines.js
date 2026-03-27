@@ -1,10 +1,10 @@
 /**
  * 📅 DEADLINE TOOLS - Add, get, complete deadlines
+ *
+ * A1-A2 fix: Delegates to deadlineRepo (single source of truth for deadlines.json)
  */
-const {loadJSON, saveJSON, generateId, dataPath, logger} = require('./base');
-
-const DEADLINES_FILE = dataPath('deadlines.json');
-let deadlines = loadJSON(DEADLINES_FILE, {});
+const {logger} = require('./base');
+const {deadlineRepo} = require('../repositories');
 
 function getDaysUntil(date) {
     const now = new Date();
@@ -13,7 +13,7 @@ function getDaysUntil(date) {
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 }
 
-function addDeadline({title, dueDate, subject, priority = 'medium', description = '', type = 'assignment'}, userId) {
+async function addDeadline({title, dueDate, subject, priority = 'medium', description = '', type = 'assignment'}, userId) {
     if (!title || !title.trim()) {
         return {message: '\u274c Please provide a title for the deadline.', deadline: null, tip: 'Try: "My essay is due on January 15th"'};
     }
@@ -21,18 +21,11 @@ function addDeadline({title, dueDate, subject, priority = 'medium', description 
         return {message: '\u274c Invalid due date. Please provide a valid date.', deadline: null, tip: 'Try: "due on March 5th" or "due on 03/05"'};
     }
 
-    if (!deadlines[userId]) deadlines[userId] = [];
-
-    const deadline = {
-        id: generateId(), title,
-        dueDate: new Date(dueDate).toISOString(),
+    const deadline = await deadlineRepo.add(userId, {
+        title, dueDate: new Date(dueDate).toISOString(),
         subject, priority, description, type,
-        createdAt: new Date().toISOString(),
         completed: false, completedAt: null
-    };
-
-    deadlines[userId].push(deadline);
-    saveJSON(DEADLINES_FILE, deadlines);
+    });
 
     const daysUntil = getDaysUntil(dueDate);
     const urgency = daysUntil <= 1 ? '🚨' : daysUntil <= 3 ? '⚠️' : '📅';
@@ -45,8 +38,8 @@ function addDeadline({title, dueDate, subject, priority = 'medium', description 
     };
 }
 
-function getDeadlines({includeCompleted = false, subject = null}, userId) {
-    const userDeadlines = deadlines[userId] || [];
+async function getDeadlines({includeCompleted = false, subject = null}, userId) {
+    const userDeadlines = await deadlineRepo.getByUserId(userId);
     let filtered = includeCompleted ? userDeadlines : userDeadlines.filter(d => !d.completed);
 
     if (subject) {
@@ -59,8 +52,8 @@ function getDeadlines({includeCompleted = false, subject = null}, userId) {
     return {count: filtered.length, deadlines: filtered};
 }
 
-function getUpcomingDeadlines({days = 7}, userId) {
-    const userDeadlines = deadlines[userId] || [];
+async function getUpcomingDeadlines({days = 7}, userId) {
+    const userDeadlines = await deadlineRepo.getByUserId(userId);
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() + days);
 
@@ -86,16 +79,13 @@ function getUpcomingDeadlines({days = 7}, userId) {
     };
 }
 
-function markDeadlineComplete({deadlineId}, userId) {
-    const userDeadlines = deadlines[userId] || [];
-    const deadline = userDeadlines.find(d => d.id === deadlineId);
+async function markDeadlineComplete({deadlineId}, userId) {
+    const deadline = await deadlineRepo.getById(userId, deadlineId);
     if (!deadline) return {success: false, message: 'Deadline not found'};
 
-    deadline.completed = true;
-    deadline.completedAt = new Date().toISOString();
-    saveJSON(DEADLINES_FILE, deadlines);
+    await deadlineRepo.markComplete(userId, deadlineId);
 
-    const wasOnTime = new Date(deadline.completedAt) <= new Date(deadline.dueDate);
+    const wasOnTime = new Date() <= new Date(deadline.dueDate);
     return {
         success: true, message: `✅ Deadline completed: "${deadline.title}"`, wasOnTime,
         encouragement: wasOnTime ? '🎉 Great job finishing on time!' : '👍 Better late than never! You got it done.'

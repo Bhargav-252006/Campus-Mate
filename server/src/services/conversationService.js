@@ -10,7 +10,7 @@
  *   4. Route to sub-agent
  *   5. Run post-processing pipeline
  *   6. Save messages
- *   7. Emit events for stats / n8n
+ *   7. Emit events for stats
  *
  * routes/chat.js calls ConversationService.handleChat() — nothing more.
  */

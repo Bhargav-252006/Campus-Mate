@@ -1,0 +1,2 @@
+-- Initial setup for Campus Mate PostgreSQL database
+-- Run this as initialization script

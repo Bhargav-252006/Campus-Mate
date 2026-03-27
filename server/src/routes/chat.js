@@ -17,7 +17,7 @@ router.post('/', async (req, res) => {
             return res.status(400).json({error: "Message is required"});
         }
 
-        logger.user(userId, 'Chat request', message.substring(0, 50));
+        logger.user(userId, 'Chat request received');
 
         const envelope = await conversationService.handleChat({userId, message, clientRequestId});
 

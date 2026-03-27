@@ -103,3 +103,21 @@ getStudentMatePersona(profile, context, specialization)
      v
 fullSystemPrompt = persona + agentInstructions + adaptiveTone + continuityPrompt
 ```
+
+## Plain-English Summary
+
+The memory system exists to keep the assistant helpful without making every response depend on the entire conversation history.
+
+- Working memory is for what is happening right now.
+- Short-term memory is for recent context.
+- Episodic memory is for important moments.
+- Semantic memory is for facts and patterns.
+- Profile memory is for stable user preferences.
+
+The prompt builder then chooses the most useful parts of memory and turns them into a compact prompt for the model.
+
+## Troubleshooting
+
+- If the assistant forgets context too quickly, check the memory limits.
+- If prompts become too long, check the token budget and truncation rules.
+- If answers feel generic, make sure the profile and summary sections are being included.

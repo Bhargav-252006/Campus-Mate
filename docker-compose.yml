@@ -1,0 +1,178 @@
+services:
+  # ============ CORE SERVICES ============
+  api-gateway:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.gateway
+    container_name: campus-mate-gateway
+    ports:
+      - "3000:3000" # Only public-facing API port
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3000
+      AUTH_SERVICE_URL: http://auth-service:3001
+      CHAT_SERVICE_URL: http://chat-service:3002
+      DATA_SERVICE_URL: http://data-service:3003
+      ANALYTICS_SERVICE_URL: http://analytics-service:3004
+      MEMORY_SERVICE_URL: http://memory-service:3005
+      WEBHOOKS_SERVICE_URL: http://webhooks-service:3006
+      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      LOG_LEVEL: ${LOG_LEVEL:-warn}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+    networks:
+      - campus-mate-network
+    restart: unless-stopped
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.auth
+    container_name: campus-mate-auth
+    # No ports — internal service only, routed through api-gateway
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3001
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_EXPIRY: ${JWT_EXPIRY:-24h}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      LOG_LEVEL: ${LOG_LEVEL:-warn}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+    networks:
+      - campus-mate-network
+    restart: unless-stopped
+
+  chat-service:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.chat
+    container_name: campus-mate-chat
+    # No ports — internal service only
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3002
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      GROQ_API_KEY: ${GROQ_API_KEY:?GROQ_API_KEY is required}
+      GROQ_MODEL: ${GROQ_MODEL:-llama-3.3-70b-versatile}
+      LOG_LEVEL: ${LOG_LEVEL:-warn}
+      MEMORY_SERVICE_URL: http://memory-service:3005
+      LLM_PROVIDER: ${LLM_PROVIDER:-groq}
+      LLM_MODEL: ${LLM_MODEL:-llama-3.3-70b-versatile}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+    networks:
+      - campus-mate-network
+    restart: unless-stopped
+
+  data-service:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.data
+    container_name: campus-mate-data
+    # No ports — internal service only
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3003
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      LOG_LEVEL: ${LOG_LEVEL:-warn}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+    networks:
+      - campus-mate-network
+    restart: unless-stopped
+
+  analytics-service:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.analytics
+    container_name: campus-mate-analytics
+    # No ports — internal service only
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3004
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      LOG_LEVEL: ${LOG_LEVEL:-warn}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+    networks:
+      - campus-mate-network
+    restart: unless-stopped
+
+  memory-service:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.memory
+    container_name: campus-mate-memory
+    # No ports — internal service only
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3005
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      LOG_LEVEL: ${LOG_LEVEL:-warn}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+    networks:
+      - campus-mate-network
+    restart: unless-stopped
+
+  webhooks-service:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.webhooks
+    container_name: campus-mate-webhooks
+    # No ports — internal service only
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3006
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:?WEBHOOK_SECRET is required}
+      LOG_LEVEL: ${LOG_LEVEL:-warn}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+    networks:
+      - campus-mate-network
+    restart: unless-stopped
+
+  # ============ FRONTEND ============
+  client:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.client
+    container_name: campus-mate-client
+    ports:
+      - "80:80" # nginx serves the production build on port 80
+    depends_on:
+      - api-gateway
+    networks:
+      - campus-mate-network
+    restart: unless-stopped
+
+  # ============ MONITORING ============
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: campus-mate-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - campus-mate-network
+    restart: unless-stopped
+
+networks:
+  campus-mate-network:
+    driver: bridge

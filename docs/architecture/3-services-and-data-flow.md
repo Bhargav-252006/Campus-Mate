@@ -93,3 +93,18 @@ server/data/
 +-- study-plans.json        <-- studyPlanRepo / DataStore
 \-- stats.json              <-- statsRepo / DataStore
 ```
+
+## Plain-English Summary
+
+The backend currently has more than one helper that reads and writes JSON files. That gives flexibility, but it also means the same kind of data can be managed in different ways.
+
+The main thing to remember is ownership:
+- each file should have a clear owner,
+- each request should know which user it belongs to,
+- and the cache should never be treated as the source of truth.
+
+## Troubleshooting
+
+- If a change seems to disappear, check for another helper writing the same file.
+- If data looks stale, check the cache first.
+- If a tool works but the UI does not change, check whether the frontend is reading a different store.

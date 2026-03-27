@@ -1,55 +1,41 @@
 /**
  * 📝 NOTES TOOLS - Save, get, search, delete notes
+ *
+ * A1-A2 fix: Delegates to notesRepo (single source of truth for notes.json)
+ * instead of maintaining a separate in-memory copy via loadJSON/saveJSON.
  */
-const {loadJSON, saveJSON, generateId, dataPath, logger} = require('./base');
+const {logger} = require('./base');
+const {notesRepo} = require('../repositories');
 
-const NOTES_FILE = dataPath('notes.json');
-let notes = loadJSON(NOTES_FILE, {});
-
-function saveNote({title, content, tags = []}, userId) {
-    if (!notes[userId]) notes[userId] = [];
-
-    const note = {
-        id: generateId(), title, content,
+async function saveNote({title, content, tags = []}, userId) {
+    const note = await notesRepo.add(userId, {
+        title, content,
         tags: Array.isArray(tags) ? tags : [tags],
-        createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
-    };
+    });
 
-    notes[userId].push(note);
-    saveJSON(NOTES_FILE, notes);
     logger.debug(`Note saved for ${userId}: ${title}`);
-
     return {message: `📝 Note saved: "${title}"`, note};
 }
 
-function getNotes({tag = null}, userId) {
-    const userNotes = notes[userId] || [];
-    const filtered = tag
-        ? userNotes.filter(n => n.tags.includes(tag.toLowerCase()))
-        : userNotes;
-    filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    return {count: filtered.length, notes: filtered};
+async function getNotes({tag = null}, userId) {
+    const userNotes = tag
+        ? await notesRepo.getByTag(userId, tag)
+        : await notesRepo.getByUserId(userId);
+    const sorted = [...userNotes].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    return {count: sorted.length, notes: sorted};
 }
 
-function searchNotes({query}, userId) {
-    const userNotes = notes[userId] || [];
-    const lowerQuery = query.toLowerCase();
-    const matches = userNotes.filter(n =>
-        n.title.toLowerCase().includes(lowerQuery) ||
-        n.content.toLowerCase().includes(lowerQuery) ||
-        n.tags.some(t => t.toLowerCase().includes(lowerQuery))
-    );
+async function searchNotes({query}, userId) {
+    const matches = await notesRepo.search(userId, query);
     return {query, count: matches.length, notes: matches};
 }
 
-function deleteNote({noteId}, userId) {
-    if (!notes[userId]) return {success: false, message: 'No notes found'};
-    const index = notes[userId].findIndex(n => n.id === noteId);
-    if (index === -1) return {success: false, message: 'Note not found'};
-    const deleted = notes[userId].splice(index, 1)[0];
-    saveJSON(NOTES_FILE, notes);
-    return {success: true, message: `Deleted note: "${deleted.title}"`};
+async function deleteNote({noteId}, userId) {
+    const note = await notesRepo.getById(userId, noteId);
+    if (!note) return {success: false, message: 'Note not found'};
+    await notesRepo.remove(userId, noteId);
+    return {success: true, message: `Deleted note: "${note.title}"`};
 }
 
 module.exports = {saveNote, getNotes, searchNotes, deleteNote};

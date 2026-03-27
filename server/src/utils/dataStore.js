@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const logger = require('./logger');
 
 const DATA_DIR = path.join(__dirname, '../../data');
 
@@ -24,7 +25,7 @@ class DataStore {
                 return JSON.parse(content);
             }
         } catch (error) {
-            console.error(`Error loading ${this.filepath}:`, error);
+            logger.error(`DataStore: failed loading ${this.filepath}`, error);
         }
         return {};
     }
@@ -61,11 +62,11 @@ class DataStore {
                 })
                 .catch(err => {
                     this._writeInProgress = false;
-                    console.error(`Error saving ${this.filepath}:`, err);
+                    logger.error(`DataStore: save failed ${this.filepath}`, err);
                 });
         } catch (error) {
             this._writeInProgress = false;
-            console.error(`Error saving ${this.filepath}:`, error);
+            logger.error(`DataStore: save failed ${this.filepath}`, error);
         }
     }
 
@@ -82,7 +83,7 @@ class DataStore {
             fs.writeFileSync(this.filepath, JSON.stringify(this.data, null, 2));
             this._dirty = false;
         } catch (error) {
-            console.error(`Error force-saving ${this.filepath}:`, error);
+            logger.error(`DataStore: forceSave failed ${this.filepath}`, error);
         }
     }
 
@@ -104,7 +105,7 @@ class DataStore {
         }
         const newItem = {
             ...item,
-            id: Date.now().toString(),
+            id: Date.now().toString(36) + Math.random().toString(36).substring(2),
             createdAt: new Date().toISOString()
         };
         this.data[userId].push(newItem);

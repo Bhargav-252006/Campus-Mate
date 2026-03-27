@@ -1,6 +1,6 @@
 /**
- * WEBHOOK ROUTES - Inbound n8n / external triggers
- * S6 fix: Added webhook secret verification
+ * WEBHOOK ROUTES - Inbound external triggers
+ * Handles signed webhook events from external sources.
  */
 const express = require('express');
 const crypto = require('crypto');
@@ -44,10 +44,10 @@ function verifyWebhookSignature(req, res, next) {
 }
 
 /**
- * POST /api/webhooks/n8n
+ * POST /api/webhooks/external
  * Body: { type: "execute_tool", tool: "addDeadline", args: {...}, userId: "..." }
  */
-router.post('/n8n', verifyWebhookSignature, async (req, res) => {
+router.post('/external', verifyWebhookSignature, async (req, res) => {
     try {
         const {type, tool, args, userId} = req.body;
 

@@ -7,7 +7,50 @@ const memoryManager = require('../utils/memoryManagerV3');
 const {getFreeModels, config: llmConfig} = require('../utils/llmService');
 const logger = require('../utils/logger');
 
-// Get user profile
+const PROFILE_ALLOWED_FIELDS = new Set([
+    'name',
+    'grade',
+    'institution',
+    'subjects',
+    'goals',
+    'strengths',
+    'weakAreas'
+]);
+
+function sanitizeProfileUpdates(input = {}) {
+    const updates = {};
+
+    Object.entries(input).forEach(([key, value]) => {
+        if (!PROFILE_ALLOWED_FIELDS.has(key)) return;
+        updates[key] = value;
+    });
+
+    if (typeof updates.name !== 'undefined' && typeof updates.name !== 'string') {
+        throw new Error('Invalid name');
+    }
+    if (typeof updates.grade !== 'undefined' && typeof updates.grade !== 'string' && typeof updates.grade !== 'number') {
+        throw new Error('Invalid grade');
+    }
+    if (typeof updates.institution !== 'undefined' && typeof updates.institution !== 'string') {
+        throw new Error('Invalid institution');
+    }
+
+    ['subjects', 'goals', 'strengths', 'weakAreas'].forEach((field) => {
+        if (typeof updates[field] === 'undefined') return;
+        if (!Array.isArray(updates[field])) {
+            throw new Error(`Invalid ${field}`);
+        }
+        updates[field] = updates[field].slice(0, 100);
+    });
+
+    return updates;
+}
+
+router.get('/profile/:userId', (req, res) => {
+    res.status(403).json({error: 'Forbidden'});
+});
+
+// Get user profile (using auth middleware userId)
 router.get('/profile', (req, res) => {
     try {
         const userId = req.userId;
@@ -27,7 +70,10 @@ router.get('/profile', (req, res) => {
 router.put('/profile', (req, res) => {
     try {
         const userId = req.userId;
-        const updates = req.body;
+        const updates = sanitizeProfileUpdates(req.body || {});
+        if (Object.keys(updates).length === 0) {
+            return res.status(400).json({error: 'No allowed profile fields provided'});
+        }
         memoryManager.updateProfile(userId, updates);
         logger.info(`Profile updated for ${userId}`);
         res.json({success: true, message: 'Profile updated!'});

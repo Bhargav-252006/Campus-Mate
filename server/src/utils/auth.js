@@ -2,7 +2,7 @@
  * Authentication Middleware (JWT)
  * 
  * Device-based auth for Campus Mate:
- * - Auto-generates a session token on first visit (no login required)
+ * - Creates session token via /auth/session
  * - Validates tokens on protected routes
  * - Maps tokens to userIds for data isolation
  * - userId from token takes precedence over body/query params
@@ -26,6 +26,42 @@ const JWT_SECRET = (() => {
 })();
 
 const JWT_EXPIRY = process.env.JWT_EXPIRY || '7d';
+const SESSION_REFRESH_THRESHOLD_MS = 48 * 60 * 60 * 1000;
+
+function parseDurationToMs(duration) {
+    if (typeof duration === 'number' && Number.isFinite(duration)) {
+        return duration;
+    }
+
+    const match = String(duration).trim().match(/^(\d+)([smhd])$/i);
+    if (!match) {
+        return 7 * 24 * 60 * 60 * 1000;
+    }
+
+    const value = Number(match[1]);
+    const unit = match[2].toLowerCase();
+    const unitToMs = {
+        s: 1000,
+        m: 60 * 1000,
+        h: 60 * 60 * 1000,
+        d: 24 * 60 * 60 * 1000
+    };
+
+    return value * (unitToMs[unit] || unitToMs.d);
+}
+
+const JWT_EXPIRY_MS = parseDurationToMs(JWT_EXPIRY);
+
+function setSessionCookie(res, token) {
+    const isProd = process.env.NODE_ENV === 'production';
+    res.cookie('campusMate_token', token, {
+        httpOnly: true,
+        secure: isProd,
+        sameSite: 'lax',
+        maxAge: JWT_EXPIRY_MS,
+        path: '/'
+    });
+}
 
 /**
  * Generate a new session token for a user
@@ -50,6 +86,18 @@ function verifyToken(token) {
     }
 }
 
+function getCookieValue(cookieHeader, key) {
+    if (!cookieHeader) return null;
+    const pairs = cookieHeader.split(';');
+    for (const pair of pairs) {
+        const [rawName, ...rawValue] = pair.trim().split('=');
+        if (rawName === key) {
+            return decodeURIComponent(rawValue.join('='));
+        }
+    }
+    return null;
+}
+
 /**
  * Express middleware — extracts userId from JWT
  * 
@@ -59,30 +107,40 @@ function verifyToken(token) {
  */
 function authMiddleware(req, res, next) {
     const authHeader = req.headers.authorization;
-    
+    const cookieToken = getCookieValue(req.headers.cookie, 'campusMate_token');
+
+    let token = null;
+
     if (authHeader && authHeader.startsWith('Bearer ')) {
-        const token = authHeader.slice(7);
-        const decoded = verifyToken(token);
+        token = authHeader.slice(7);
+    } else if (cookieToken) {
+        token = cookieToken;
+    }
 
-        if (decoded && decoded.userId) {
-            // S5 fix: Token userId takes precedence — ignore any userId in body/query
-            req.userId = decoded.userId;
-            req.authenticated = true;
-            return next();
-        }
+    if (!token) {
+        return res.status(401).json({error: 'Authentication required. Create a session first via /api/auth/session.'});
+    }
 
-        // Token exists but is invalid/expired — reject instead of falling through
+    const decoded = verifyToken(token);
+
+    if (!decoded || !decoded.userId) {
         logger.warn('Invalid or expired JWT token — rejecting request');
         return res.status(401).json({error: 'Invalid or expired token. Please re-authenticate.'});
     }
 
-    // No token provided: auto-provision a session for backward compatibility
-    // Generate a proper unique userId instead of using a shared default
-    const session = generateToken();
-    req.userId = session.userId;
-    req.authenticated = false;
-    req.newSessionToken = session.token; // Routes can return this to the client
-    logger.debug(`Auto-provisioned session for ${req.userId}`);
+    // Token userId always takes precedence over any userId in request payload.
+    req.userId = decoded.userId;
+    req.authenticated = true;
+
+    const expiresAtMs = decoded.exp ? decoded.exp * 1000 : 0;
+    const timeRemainingMs = expiresAtMs ? expiresAtMs - Date.now() : 0;
+    if (timeRemainingMs > 0 && timeRemainingMs <= SESSION_REFRESH_THRESHOLD_MS) {
+        const refreshed = generateToken(decoded.userId);
+        req.sessionToken = refreshed.token;
+        setSessionCookie(res, refreshed.token);
+        res.setHeader('x-campusmate-session-refreshed', 'true');
+    }
+
     next();
 }
 
@@ -91,5 +149,6 @@ module.exports = {
     generateToken,
     verifyToken,
     authMiddleware,
-    JWT_EXPIRY
+    JWT_EXPIRY,
+    JWT_EXPIRY_MS
 };

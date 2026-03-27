@@ -1,6 +1,4 @@
-const {callLLM} = require('../utils/llmService');
-const {getStudentMatePersona, getAdaptiveTone, getContinuityPrompt} = require('./studentMatePersona');
-const logger = require('../utils/logger');
+const {BaseAgent} = require('./BaseAgent');
 
 /**
  * ACADEMIC AGENT - Specialized for Educational Content
@@ -20,7 +18,6 @@ const AGENT_CONFIG = {
         'literature', 'language', 'engineering'
     ],
 
-    // Agent-specific instructions (combined with core persona)
     agentInstructions: `
 ╔═══════════════════════════════════════════════════════════╗
 ║           ACADEMIC TUTORING SPECIALIZATION                ║
@@ -67,63 +64,27 @@ Think of it like [relatable analogy]...
 Want me to explain any part in more detail? 🎯"`
 };
 
-class AcademicAgent {
+class AcademicAgent extends BaseAgent {
     constructor() {
-        this.config = AGENT_CONFIG;
-    }
-
-    async handle(message, context = '', userPatterns = {}, profile = {}, toolSchemas = []) {
-        logger.agent(this.config.name, 'Processing academic query...');
-
-        // Build unified Campus Mate persona + agent specialization
-        const personaPrompt = getStudentMatePersona(profile, context, this.config.specialization);
-        const tonePrompt = getAdaptiveTone(userPatterns);
-        const continuityPrompt = getContinuityPrompt();
-
-        const fullSystemPrompt = personaPrompt + this.config.agentInstructions + tonePrompt + continuityPrompt;
-
-        // Build user prompt
-        const userPrompt = this.buildPrompt(message, userPatterns);
-
-        // Call LLM with unified persona
-        const llmResponse = await callLLM(
-            fullSystemPrompt,
-            userPrompt,
-            {
-                maxTokens: this.config.maxTokens,
-                temperature: this.config.temperature,
-                taskType: 'heavy_reasoning',
-                toolSchemas
-            }
-        );
-
-        if (llmResponse) {
-            return llmResponse;
-        }
-
-        // Friendly fallback
-        return this.getFriendlyFallback(message);
+        super(AGENT_CONFIG);
     }
 
     buildPrompt(message, userPatterns) {
         let prompt = '';
-
         if (userPatterns?.learningStyle) {
             prompt += `Note: This student prefers ${userPatterns.learningStyle} learning.\n\n`;
         }
-
         prompt += `Student's Question: ${message}`;
         return prompt;
     }
 
-    getFriendlyFallback(message) {
+    getFriendlyFallback(message, profile = {}) {
         return `Hey! 😊 I'd love to help you with that question. Unfortunately, I'm having a small technical hiccup right now. 
 
 Could you try asking again in a moment? Or if you want, rephrase it slightly - sometimes that helps!
 
 I'm here for you! 💪`;
     }
-
 }
 
 module.exports = new AcademicAgent();

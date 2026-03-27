@@ -6,19 +6,29 @@
  */
 const express = require('express');
 const router = express.Router();
-const {generateToken, authMiddleware} = require('../utils/auth');
+const {generateToken, authMiddleware, JWT_EXPIRY_MS} = require('../utils/auth');
 const logger = require('../utils/logger');
 
 // ── Auth session (before auth middleware) ────────────────────────
 router.post('/auth/session', (req, res) => {
     try {
-        const {userId} = req.body;
-        const session = generateToken(userId || undefined);
+        const requestedUserId = req.body?.userId || req.cookies?.campusMate_userId;
+        const session = generateToken(requestedUserId);
         logger.info(`New session created for ${session.userId}`);
+
+        const isProd = process.env.NODE_ENV === 'production';
+        res.cookie('campusMate_token', session.token, {
+            httpOnly: true,
+            secure: isProd,
+            sameSite: 'lax',
+            maxAge: JWT_EXPIRY_MS,
+            path: '/'
+        });
+
         res.json({
             token: session.token,
             userId: session.userId,
-            message: 'Session created. Send token in Authorization: Bearer <token> header.'
+            message: 'Session created. Use this token in Authorization: Bearer <token>.'
         });
     } catch (error) {
         logger.error('Auth session error', error);

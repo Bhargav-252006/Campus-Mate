@@ -413,3 +413,26 @@ These are documented in detail in [5-issues-and-fixes.md](./5-issues-and-fixes.m
 4. **PostProcessor Gemini Coupling** — Post-processor makes direct Gemini API call instead of using llmService
 5. **Unbounded Tool Data Growth** — JSON files grow without limits
 6. **Missing Test Suite** — No automated tests exist
+
+## Plain-English Summary
+
+This document is the map for the whole app.
+
+- The browser talks to the frontend.
+- The frontend talks to the API gateway.
+- The gateway sends requests to internal services.
+- The chat service decides which agent should answer.
+- The memory system keeps useful context.
+- The persistence layer stores student data and history.
+
+If you understand this page, the rest of the architecture docs will make much more sense.
+
+## Reading Order
+
+1. Request lifecycle.
+2. Agent pipeline.
+3. Services and data flow.
+4. Memory and prompts.
+5. Issues and fixes.
+
+That order follows the path of a chat message through the system.

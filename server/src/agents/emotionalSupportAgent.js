@@ -1,16 +1,18 @@
-const {callLLM} = require('../utils/llmService');
-const {getStudentMatePersona, getAdaptiveTone, getContinuityPrompt} = require('./studentMatePersona');
+const {BaseAgent} = require('./BaseAgent');
 const logger = require('../utils/logger');
+const responseMatrix = require('../utils/responseMatrix');
 
 /**
  * EMOTIONAL SUPPORT AGENT - Specialized for Mental Health & Wellbeing
  * Uses unified Student Mate persona for consistent, caring support
+ *
+ * Extra methods: detectCrisis(), getCrisisResponse(), matchesEmotion()
  */
 
 const AGENT_CONFIG = {
     name: 'Emotional Support Agent',
     specialization: '💙 Emotional Support & Wellbeing',
-    temperature: 0.8,  // Slightly higher for more empathetic responses
+    temperature: 0.8,
     maxTokens: 1500,
 
     topics: [
@@ -66,48 +68,23 @@ CRITICAL SAFETY RULES:
 Remember: You are a SAFE SPACE. No judgment. Just support and understanding. 💙`
 };
 
-class EmotionalSupportAgent {
+class EmotionalSupportAgent extends BaseAgent {
     constructor() {
-        this.config = AGENT_CONFIG;
+        super(AGENT_CONFIG);
     }
 
     async handle(message, context = '', userPatterns = {}, profile = {}, toolSchemas = []) {
-        logger.agent(this.config.name, 'Processing emotional support request...');
+        const level = responseMatrix.detectLevel(message);
 
         // CRITICAL: Check for crisis keywords FIRST
-        if (this.detectCrisis(message)) {
+        if (level === responseMatrix.LEVELS.CRISIS || this.detectCrisis(message)) {
             logger.warn(`[${this.config.name}] CRISIS DETECTED - Providing safety response`);
             return this.getCrisisResponse(profile);
         }
 
-        // Build unified Student Mate persona + agent specialization
-        const personaPrompt = getStudentMatePersona(profile, context, this.config.specialization);
-        const tonePrompt = getAdaptiveTone(userPatterns); // Use actual patterns instead of forcing high
-        const continuityPrompt = getContinuityPrompt();
-
-        const fullSystemPrompt = personaPrompt + this.config.agentInstructions + tonePrompt + continuityPrompt;
-
-        // Build user prompt
-        const userPrompt = this.buildPrompt(message, userPatterns);
-
-        // Call LLM with unified persona
-        const llmResponse = await callLLM(
-            fullSystemPrompt,
-            userPrompt,
-            {
-                maxTokens: this.config.maxTokens,
-                temperature: this.config.temperature,
-                taskType: 'heavy_reasoning',
-                toolSchemas
-            }
-        );
-
-        if (llmResponse) {
-            return llmResponse;
-        }
-
-        // Friendly fallback
-        return this.getFriendlyFallback(message, profile);
+        const adjustedMessage = `${message}\n\n[Response Matrix Rule]: ${responseMatrix.getInstructionForLevel(level)}`;
+        const baseResponse = await super.handle(adjustedMessage, context, userPatterns, profile, toolSchemas);
+        return responseMatrix.applyMatrix(baseResponse, level, profile);
     }
 
     detectCrisis(message) {
@@ -145,11 +122,9 @@ I'm here if you want to talk, but please also reach out to one of these helpline
 
     buildPrompt(message, userPatterns) {
         let prompt = '';
-
         if (userPatterns?.emotionalState) {
             prompt += `Note: Student has been showing signs of ${userPatterns.emotionalState}.\n\n`;
         }
-
         prompt += `Student says: ${message}`;
         return prompt;
     }

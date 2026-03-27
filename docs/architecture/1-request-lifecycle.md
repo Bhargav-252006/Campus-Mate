@@ -135,3 +135,24 @@ HTTP POST /api/chat { message, userId, clientRequestId }
 |
 \-- HTTP 200 { response, userId, agentType, confidence, ... }
 ```
+
+## What This Means
+
+This flow shows that chat is not one single function. It is a pipeline:
+
+- validate input,
+- check identity,
+- store the message,
+- decide the intent,
+- choose an agent,
+- clean the response,
+- save the result,
+- and return it to the browser.
+
+That is why one small bug in routing, memory, or persistence can affect the whole user experience.
+
+## Debugging Tips
+
+- If a message appears twice, compare the optimistic client message with the history fetch.
+- If a response is slow, check the chat service and its model call.
+- If a route fails with 401 or 403, check the token and user scope.

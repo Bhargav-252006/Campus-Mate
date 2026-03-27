@@ -85,3 +85,16 @@ ACADEMIC   -> generateQuiz, getQuizzes, saveQuizResult, webSearch,
               wikipediaSummary, youtubeSearch, saveNote, getNotes, searchNotes
 GENERAL    -> setReminder, getReminders, getTodaysTasks, getUpcomingDeadlines
 ```
+
+## Plain-English Summary
+
+- The router first tries to understand what the user wants.
+- If the topic is clear, it sends the message to one specialist agent.
+- If the topic is not clear enough, it asks for clarification instead of guessing.
+- Each agent gets a different tool set, so the wrong tool is less likely to be used.
+
+## Troubleshooting
+
+- Wrong agent chosen: inspect the classifier and the confidence gate.
+- Repeated rerouting: check the session tiebreaker and whether the user input is ambiguous.
+- Unsafe answer: make sure the user text is still treated as untrusted data.

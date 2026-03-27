@@ -22,10 +22,8 @@ const config = {
     // ── LLM provider override (also in llmService) ──────────
     LLM_PROVIDER: process.env.LLM_PROVIDER || 'ollama',
 
-    // ── Event bus / integrations ─────────────────────────────
+    // ── Event bus ────────────────────────────────────────────
     ENABLE_EVENT_BUS: process.env.ENABLE_EVENT_BUS !== 'false',
-    ENABLE_N8N_BRIDGE: process.env.ENABLE_N8N_BRIDGE === 'true',
-    N8N_WEBHOOK_URL: process.env.N8N_WEBHOOK_URL || null,
 
     // ── Logging ──────────────────────────────────────────────
     ENABLE_LLM_TRACING: process.env.ENABLE_LLM_TRACING !== 'false',

@@ -1,15 +1,17 @@
-const {callLLM} = require('../utils/llmService');
-const {getStudentMatePersona, getAdaptiveTone, getContinuityPrompt} = require('./studentMatePersona');
+const {BaseAgent} = require('./BaseAgent');
 
 /**
  * PERSONA SWITCH AGENT - Specialized for Adaptive Communication Styles
  * Uses unified Student Mate persona with flexible teaching styles
+ *
+ * Extra methods: detectRequestedPersona()
+ * Overrides buildSystemPrompt() to inject detected persona style.
  */
 
 const AGENT_CONFIG = {
     name: 'Persona Switch Agent',
     specialization: '🎭 Adaptive Teaching Styles',
-    temperature: 0.8,  // Higher for more creative, varied responses
+    temperature: 0.8,
     maxTokens: 1500,
 
     personas: {
@@ -86,52 +88,31 @@ RESPONSE APPROACH (as Student Mate):
 Remember: You're still Student Mate - just wearing different "hats" to teach better! 🎭`
 };
 
-class PersonaSwitchAgent {
+class PersonaSwitchAgent extends BaseAgent {
     constructor() {
-        this.config = AGENT_CONFIG;
+        super(AGENT_CONFIG);
+        // Store last detected persona for buildSystemPrompt
+        this._detectedPersona = null;
     }
 
     async handle(message, context = '', userPatterns = {}, profile = {}, toolSchemas = []) {
-        console.log(`[${this.config.name}] Processing persona switch request...`);
+        // Detect persona before building system prompt (used in buildSystemPrompt override)
+        this._detectedPersona = this.detectRequestedPersona(message);
+        return super.handle(message, context, userPatterns, profile, toolSchemas);
+    }
 
-        // Detect requested persona
-        const detectedPersona = this.detectRequestedPersona(message);
-
-        // Build unified Student Mate persona + agent specialization + persona style
-        const personaPrompt = getStudentMatePersona(profile, context, this.config.specialization);
-        const tonePrompt = getAdaptiveTone(userPatterns);
-        const continuityPrompt = getContinuityPrompt();
-
-        let fullSystemPrompt = personaPrompt + this.config.agentInstructions;
-
-        // Add specific persona style if detected
-        if (detectedPersona) {
-            fullSystemPrompt += `\n\nCURRENT ACTIVE STYLE:\n${this.config.personas[detectedPersona].style}`;
+    /** Override to inject detected persona style into system prompt. */
+    buildSystemPrompt(profile, context, userPatterns) {
+        let prompt = super.buildSystemPrompt(profile, context, userPatterns);
+        if (this._detectedPersona) {
+            const style = this.config.personas[this._detectedPersona].style;
+            // Insert persona style before the tone/continuity suffixes
+            prompt = prompt.replace(
+                this.config.agentInstructions,
+                this.config.agentInstructions + `\n\nCURRENT ACTIVE STYLE:\n${style}`
+            );
         }
-
-        fullSystemPrompt += tonePrompt + continuityPrompt;
-
-        // Build user prompt
-        const userPrompt = `Student says: ${message}`;
-
-        // Call LLM with unified persona
-        const llmResponse = await callLLM(
-            fullSystemPrompt,
-            userPrompt,
-            {
-                maxTokens: this.config.maxTokens,
-                temperature: this.config.temperature,
-                taskType: 'heavy_reasoning',
-                toolSchemas
-            }
-        );
-
-        if (llmResponse) {
-            return llmResponse;
-        }
-
-        // Friendly fallback
-        return this.getFriendlyFallback(message, profile);
+        return prompt;
     }
 
     detectRequestedPersona(message) {
@@ -150,7 +131,7 @@ class PersonaSwitchAgent {
             return 'interviewer';
         }
 
-        return null; // Default Student Mate style
+        return null;
     }
 
     getFriendlyFallback(message, profile = {}) {

@@ -1,0 +1,868 @@
+/* Campus Mate UI Enhancements
+   Layered on top of index.css to modernize the app pages except chat. */
+
+:root {
+    --surface-1: rgba(255, 255, 255, 0.06);
+    --surface-2: rgba(255, 255, 255, 0.09);
+    --surface-3: rgba(255, 255, 255, 0.12);
+    --page-border: rgba(255, 255, 255, 0.10);
+    --page-shadow: 0 24px 80px rgba(0, 0, 0, 0.22);
+    --page-shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.14);
+}
+
+[data-theme='light'] {
+    --surface-1: rgba(255, 255, 255, 0.82);
+    --surface-2: rgba(255, 255, 255, 0.92);
+    --surface-3: rgba(255, 255, 255, 0.98);
+    --page-border: rgba(15, 23, 42, 0.08);
+    --page-shadow: 0 20px 60px rgba(15, 23, 42, 0.10);
+    --page-shadow-soft: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
+body {
+    background:
+        radial-gradient(circle at top left, rgba(99, 102, 241, 0.24), transparent 30%),
+        radial-gradient(circle at top right, rgba(14, 165, 233, 0.18), transparent 28%),
+        linear-gradient(180deg, var(--bg-base), var(--bg-dark));
+}
+
+.app-container {
+    position: relative;
+}
+
+.app-container::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(circle at 20% 20%, rgba(99, 102, 241, 0.10), transparent 0 20%),
+        radial-gradient(circle at 80% 10%, rgba(16, 185, 129, 0.08), transparent 0 18%),
+        radial-gradient(circle at 70% 80%, rgba(245, 158, 11, 0.06), transparent 0 20%);
+    z-index: 0;
+}
+
+.sidebar,
+.top-header,
+.page-content {
+    position: relative;
+    z-index: 1;
+}
+
+.main-wrapper {
+    min-width: 0;
+}
+
+.page-content {
+    padding: 28px;
+}
+
+.page-content>.mx-auto {
+    width: 100%;
+}
+
+/* Shared page shell */
+.page-header {
+    margin-bottom: 22px;
+    padding: 20px 22px;
+    border: 1px solid var(--page-border);
+    border-radius: 22px;
+    background: linear-gradient(180deg, var(--surface-2), var(--surface-1));
+    box-shadow: var(--page-shadow-soft);
+    backdrop-filter: blur(18px);
+}
+
+.page-header h1,
+.dashboard-title,
+.notes-editor .note-title,
+.gpa-value,
+.timer-display,
+.study-card .card-front p,
+.study-card .card-back p {
+    letter-spacing: -0.04em;
+}
+
+.subtitle,
+.card-subtitle,
+.exams-page .subtitle,
+.notes-page .note-preview,
+.system-stats .metric-description,
+.resource-desc,
+.empty-state p,
+.empty-state-sm p {
+    color: var(--text-secondary);
+}
+
+/* Buttons */
+.btn,
+.btn-primary,
+.btn-secondary,
+.btn-ghost,
+.btn-link,
+.btn-timer,
+.quick-action-btn,
+.filter-tab,
+.filter-btn,
+.view-toggle button,
+.duration-btn,
+.rating-btn,
+.mood-option,
+.quick-subject-btn,
+.date-nav button,
+.habit-actions button,
+.task-actions button,
+.exam-actions button,
+.folder-item,
+.favorite-btn,
+.note-item,
+.resource-card,
+.course-card,
+.deadline-card,
+.analytics-card,
+.stats-card,
+.dashboard-card {
+    transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease, background 180ms ease, opacity 180ms ease;
+}
+
+.btn:hover,
+.btn-primary:hover,
+.btn-secondary:hover,
+.btn-ghost:hover,
+.btn-timer:hover,
+.quick-action-btn:hover,
+.filter-tab:hover,
+.filter-btn:hover,
+.view-toggle button:hover,
+.duration-btn:hover,
+.rating-btn:hover,
+.mood-option:hover,
+.quick-subject-btn:hover,
+.date-nav button:hover,
+.habit-actions button:hover,
+.task-actions button:hover,
+.exam-actions button:hover,
+.favorite-btn:hover,
+.note-item:hover,
+.resource-card:hover,
+.course-card:hover,
+.deadline-card:hover,
+.analytics-card:hover,
+.stats-card:hover,
+.dashboard-card:hover {
+    transform: translateY(-2px);
+}
+
+.icon-btn,
+.btn-icon,
+.btn-icon-primary,
+.close-btn,
+.delete-btn,
+.check-btn,
+.habit-actions button,
+.task-actions button,
+.exam-actions button,
+.class-actions button,
+.favorite-btn,
+.delete-folder,
+.message-action-btn,
+.rating-btn,
+.quick-subject-btn,
+.duration-btn {
+    border: 1px solid transparent;
+}
+
+/* Page-level cards */
+.dashboard-card,
+.analytics-card,
+.note-item,
+.resource-card,
+.course-card,
+.deadline-card,
+.exam-card,
+.stat-card,
+.gpa-card,
+.pomo-card,
+.mood-stat-card,
+.today-mood-card,
+.insight-card,
+.habit-row,
+.focus-container,
+.system-stats,
+.modal,
+.timetable-container,
+.chat-page,
+.top-header,
+.page-header,
+.schedule-stats,
+.deadline-stats,
+.analytics-stat-card,
+.mood-history-item {
+    border: 1px solid var(--page-border);
+    background: linear-gradient(180deg, var(--surface-2), var(--surface-1));
+    box-shadow: var(--page-shadow-soft);
+    backdrop-filter: blur(18px);
+}
+
+.dashboard-card,
+.analytics-card,
+.gpa-card,
+.pomo-card,
+.resource-card,
+.exam-card,
+.deadline-card,
+.note-item,
+.today-mood-card,
+.habit-row,
+.mood-stat-card,
+.stat-card {
+    border-radius: 20px;
+}
+
+/* Dashboard refinements */
+.dashboard-page {
+    max-width: 1440px;
+}
+
+.stats-grid,
+.analytics-stats-grid,
+.mood-stats-grid,
+.habits-stats,
+.gpa-overview,
+.schedule-stats,
+.deadline-stats {
+    display: grid;
+    gap: 16px;
+    margin-bottom: 22px;
+}
+
+.stats-grid,
+.analytics-stats-grid,
+.mood-stats-grid,
+.habits-stats {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.gpa-overview {
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.dashboard-content,
+.analytics-grid,
+.resources-layout,
+.notes-page,
+.pomodoro-container,
+.focus-container,
+.habits-grid,
+.courses-grid {
+    gap: 18px;
+}
+
+.dashboard-content {
+    grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.9fr);
+}
+
+.dashboard-header,
+.analytics-page .page-header,
+.page-header {
+    position: relative;
+    overflow: hidden;
+}
+
+.dashboard-header::after,
+.page-header::after,
+.analytics-page .page-header::after {
+    content: '';
+    position: absolute;
+    right: -100px;
+    top: -80px;
+    width: 240px;
+    height: 240px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(99, 102, 241, 0.22), transparent 70%);
+    pointer-events: none;
+}
+
+/* Dashboard cards */
+.stats-card-content,
+.card-content,
+.analytics-card,
+.gpa-card,
+.pomo-card,
+.exam-card,
+.deadline-card,
+.course-card,
+.resource-card,
+.note-item,
+.today-mood-card,
+.habit-row {
+    border-radius: inherit;
+}
+
+.stats-card-content {
+    padding: 18px;
+}
+
+.stats-value,
+.gpa-value,
+.timer-display,
+.progress-value,
+.stat-value {
+    font-weight: 900;
+}
+
+.stats-value {
+    font-size: 2rem;
+}
+
+/* Lists */
+.task-list,
+.schedule-list,
+.exams-list,
+.mood-history-list,
+.notes-list,
+.resources-grid,
+.courses-list,
+.resource-tags,
+.achievements-grid,
+.rating-grid,
+.quick-subjects,
+.duration-selector,
+.type-filters,
+.filter-tabs,
+.deadline-filters,
+.view-toggle,
+.header-actions,
+.modal-actions,
+.timer-controls,
+.chat-actions,
+.study-stats-mini,
+.quick-actions {
+    gap: 10px;
+}
+
+.task-item,
+.schedule-item,
+.mood-history-item,
+.note-item,
+.resource-card,
+.exam-card,
+.deadline-card,
+.course-card,
+.class-card,
+.habit-row,
+.analytics-card,
+.today-mood-card,
+.pomo-card {
+    overflow: hidden;
+}
+
+/* Schedule / deadlines */
+.schedule-page .task-item,
+.deadlines-page .deadline-card,
+.exams-page .exam-card,
+.notes-page .note-item,
+.resources-page .resource-card,
+.grades-page .course-card {
+    background: linear-gradient(180deg, var(--surface-3), var(--surface-1));
+}
+
+.schedule-page .task-item,
+.deadlines-page .deadline-card,
+.exams-page .exam-card,
+.notes-page .note-item,
+.resources-page .resource-card,
+.grades-page .course-card {
+    border: 1px solid var(--page-border);
+}
+
+.filter-tabs,
+.deadline-filters,
+.time-filter,
+.view-toggle,
+.type-filters,
+.date-nav,
+.header-actions,
+.modal-actions,
+.rating-grid,
+.quick-subjects,
+.duration-selector {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.filter-tab,
+.filter-btn,
+.view-toggle button,
+.duration-btn,
+.quick-subject-btn,
+.rating-btn,
+.date-nav button {
+    padding: 9px 14px;
+    border-radius: 999px;
+    background: var(--surface-1);
+    color: var(--text-secondary);
+    border: 1px solid var(--page-border);
+    font-weight: 700;
+}
+
+.filter-tab.active,
+.filter-btn.active,
+.view-toggle button.active,
+.duration-btn.active,
+.rating-btn.active,
+.quick-subject-btn.active,
+.mood-option.selected {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: white;
+    border-color: transparent;
+    box-shadow: 0 10px 20px rgba(99, 102, 241, 0.18);
+}
+
+/* Timetable */
+.timetable-container {
+    overflow: auto;
+}
+
+.timetable-grid th,
+.timetable-grid td {
+    border-color: var(--page-border);
+}
+
+.timetable-grid th,
+.time-cell {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.class-card {
+    box-shadow: 0 12px 22px rgba(99, 102, 241, 0.18);
+}
+
+.add-class-btn {
+    opacity: 0.65;
+}
+
+/* Notes */
+.notes-page {
+    display: grid;
+    grid-template-columns: 320px minmax(0, 1fr);
+    min-height: 760px;
+}
+
+.notes-sidebar,
+.notes-editor,
+.resources-sidebar,
+.resources-main {
+    border-radius: 24px;
+    border: 1px solid var(--page-border);
+    background: linear-gradient(180deg, var(--surface-2), var(--surface-1));
+    box-shadow: var(--page-shadow-soft);
+}
+
+.notes-sidebar,
+.resources-sidebar {
+    padding: 18px;
+}
+
+.notes-editor,
+.resources-main {
+    padding: 20px;
+}
+
+.note-item {
+    padding: 14px;
+}
+
+.note-item.active,
+.folder-item.active {
+    background: rgba(99, 102, 241, 0.12);
+    border-color: rgba(99, 102, 241, 0.24);
+}
+
+.note-textarea,
+.editor-meta input,
+.notes-search input,
+.resources-toolbar input,
+.form-group input,
+.form-group select,
+.form-group textarea,
+.quick-add input,
+.task-input,
+.subject-input {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--page-border);
+    border-radius: 16px;
+}
+
+/* Resources */
+.resources-layout {
+    display: grid;
+    grid-template-columns: 290px minmax(0, 1fr);
+}
+
+.resource-card {
+    padding: 18px;
+}
+
+.type-badge,
+.folder-item,
+.tag,
+.subject-badge,
+.note-subject,
+.priority-badge,
+.status-badge,
+.day-name,
+.day-num,
+.stat-num,
+.achievement,
+.exams-list .exam-card,
+.deadline-stat,
+.analytics-stat-card {
+    border-radius: 999px;
+}
+
+.resource-card .type-badge,
+.folder-item .count,
+.resource-tags .tag,
+.deadline-meta .type-badge,
+.deadline-meta .subject-badge {
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.favorite-btn,
+.delete-folder,
+.btn-icon-primary,
+.close-btn,
+.delete-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-secondary);
+}
+
+.favorite-btn.active {
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.12);
+}
+
+/* Mood tracker */
+.mood-grid,
+.achievements-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 12px;
+}
+
+.mood-option,
+.achievement,
+.stat-card,
+.mood-stat-card,
+.analytics-stat-card,
+.deadline-stat {
+    padding: 14px;
+    border: 1px solid var(--page-border);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.energy-slider {
+    accent-color: var(--primary);
+}
+
+/* Pomodoro / focus */
+.pomodoro-container {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+}
+
+.timer-card,
+.focus-container,
+.pomo-card,
+.study-card-container,
+.study-card,
+.focus-mode-page .timer-circle {
+    background: linear-gradient(180deg, var(--surface-2), var(--surface-1));
+    border: 1px solid var(--page-border);
+    box-shadow: var(--page-shadow-soft);
+}
+
+.timer-card,
+.study-card,
+.focus-mode-page .timer-circle {
+    border-radius: 28px;
+}
+
+.timer-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.control-btn,
+.btn-start,
+.btn-pause,
+.btn-reset {
+    border-radius: 999px;
+    border: 1px solid var(--page-border);
+}
+
+.control-btn.primary,
+.btn-start,
+.btn-pause {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: white;
+}
+
+.focus-mode-page.fullscreen {
+    background: radial-gradient(circle at center, rgba(99, 102, 241, 0.16), transparent 60%), linear-gradient(180deg, var(--bg-dark), var(--bg-base));
+}
+
+/* Grade calculator */
+.gpa-overview {
+    align-items: stretch;
+}
+
+.gpa-card {
+    padding: 18px;
+}
+
+.gpa-card.main {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.18), rgba(59, 130, 246, 0.12));
+}
+
+.gpa-card.target,
+.gpa-card.stats {
+    background: linear-gradient(180deg, var(--surface-2), var(--surface-1));
+}
+
+.courses-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.category-card,
+.grade-item {
+    border: 1px solid var(--page-border);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.category-card {
+    border-radius: 18px;
+    padding: 14px;
+}
+
+/* Flashcards */
+.flashcards-page {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.study-header,
+.study-card-container,
+.rating-buttons,
+.deck-stats,
+.deck-actions,
+.deck-list,
+.card-actions {
+    border-radius: 20px;
+}
+
+.study-card {
+    min-height: 380px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 28px;
+}
+
+.card-front,
+.card-back {
+    width: 100%;
+    text-align: center;
+}
+
+.rating-buttons,
+.deck-card,
+.deck-list-item {
+    background: linear-gradient(180deg, var(--surface-2), var(--surface-1));
+    border: 1px solid var(--page-border);
+}
+
+/* Analytics */
+.analytics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.analytics-card {
+    padding: 18px;
+}
+
+.progress-ring-container {
+    display: grid;
+    place-items: center;
+    min-height: 220px;
+}
+
+.progress-ring-svg {
+    width: 180px;
+    height: 180px;
+}
+
+.empty-chart,
+.empty-state,
+.empty-state-sm,
+.no-note-selected,
+.no-resource-state,
+.no-habits-state,
+.no-course-state,
+.no-deadline-state {
+    border: 1px dashed rgba(148, 163, 184, 0.28);
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+/* System stats */
+.system-stats {
+    width: min(320px, calc(100vw - 32px));
+    padding: 14px;
+    background: linear-gradient(180deg, var(--surface-3), var(--surface-1));
+}
+
+.stats-panel-header {
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 10px;
+}
+
+.system-stats .stats-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.system-stats .stats-panel .panel-card {
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px solid var(--page-border);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.system-stats .panel-title {
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+.system-stats .panel-line {
+    opacity: 0.9;
+}
+
+.system-stats .panel-subline,
+.system-stats .panel-footnote {
+    opacity: 0.65;
+    font-size: 0.78rem;
+}
+
+.system-stats .panel-footnote {
+    text-align: center;
+    margin-top: 4px;
+}
+
+.panel-success {
+    background: rgba(16, 185, 129, 0.10) !important;
+}
+
+.panel-warning {
+    background: rgba(245, 158, 11, 0.10) !important;
+}
+
+.panel-info {
+    background: rgba(59, 130, 246, 0.10) !important;
+}
+
+.panel-purple {
+    background: rgba(168, 85, 247, 0.10) !important;
+}
+
+/* Landing page / loader / not found */
+.app-loader,
+.not-found-page {
+    min-height: 60vh;
+    display: grid;
+    place-items: center;
+    text-align: center;
+}
+
+.not-found-page {
+    padding: 40px 24px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1180px) {
+
+    .dashboard-content,
+    .pomodoro-container,
+    .resources-layout,
+    .notes-page {
+        grid-template-columns: 1fr;
+    }
+
+    .page-content {
+        padding: 18px;
+    }
+}
+
+@media (max-width: 860px) {
+    .sidebar {
+        position: fixed;
+        inset: 0 auto 0 0;
+        transform: translateX(0);
+        box-shadow: 40px 0 80px rgba(0, 0, 0, 0.22);
+    }
+
+    .sidebar.closed {
+        transform: translateX(-100%);
+        width: var(--sidebar-width);
+    }
+
+    .top-header {
+        padding: 12px 16px;
+    }
+
+    .page-header,
+    .dashboard-header {
+        padding: 18px;
+    }
+
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 640px) {
+    .page-content {
+        padding: 14px;
+    }
+
+    .page-header h1,
+    .dashboard-title {
+        font-size: 1.45rem;
+    }
+
+    .chat-page {
+        height: calc(100vh - 100px);
+    }
+
+    .dashboard-header,
+    .page-header,
+    .top-header {
+        border-radius: 18px;
+    }
+}

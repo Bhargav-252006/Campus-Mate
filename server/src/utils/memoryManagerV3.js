@@ -27,6 +27,7 @@
 const fs = require('fs');
 const fsPromises = fs.promises;
 const path = require('path');
+const crypto = require('crypto');
 const logger = require('./logger');
 const {callLLM} = require('./llmService');
 
@@ -63,6 +64,78 @@ const CONFIG = {
 const DATA_DIR = path.join(__dirname, '../../data');
 const MEMORY_FILE = path.join(DATA_DIR, 'memory-v3.json');
 const PROFILES_FILE = path.join(DATA_DIR, 'profiles-v3.json');
+
+const ENCRYPTED_PREFIX = 'ENCv1:';
+const PROFILE_UPDATABLE_FIELDS = new Set(['name', 'grade', 'institution', 'subjects', 'goals', 'strengths', 'weakAreas']);
+
+function parseEncryptionKey() {
+    const raw = process.env.DATA_ENCRYPTION_KEY;
+    if (!raw) return null;
+
+    const trimmed = raw.trim();
+    if (/^[a-fA-F0-9]{64}$/.test(trimmed)) {
+        return Buffer.from(trimmed, 'hex');
+    }
+
+    try {
+        const key = Buffer.from(trimmed, 'base64');
+        if (key.length === 32) return key;
+    } catch (_) {
+        // Ignore invalid base64 parsing errors and report as invalid below.
+    }
+
+    throw new Error('DATA_ENCRYPTION_KEY must be 32-byte base64 or 64-char hex');
+}
+
+const DATA_ENCRYPTION_KEY = parseEncryptionKey();
+
+if (!DATA_ENCRYPTION_KEY && process.env.NODE_ENV === 'production') {
+    logger.error('FATAL: DATA_ENCRYPTION_KEY is required in production for encrypted memory at rest.');
+    process.exit(1);
+}
+
+function encryptJson(obj) {
+    const plain = JSON.stringify(obj, null, 2);
+    if (!DATA_ENCRYPTION_KEY) return plain;
+
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv('aes-256-gcm', DATA_ENCRYPTION_KEY, iv);
+    const ciphertext = Buffer.concat([cipher.update(plain, 'utf8'), cipher.final()]);
+    const tag = cipher.getAuthTag();
+
+    const payload = {
+        iv: iv.toString('base64'),
+        tag: tag.toString('base64'),
+        data: ciphertext.toString('base64')
+    };
+
+    return ENCRYPTED_PREFIX + Buffer.from(JSON.stringify(payload), 'utf8').toString('base64');
+}
+
+function decryptJson(rawText) {
+    if (!rawText) return null;
+
+    if (!rawText.startsWith(ENCRYPTED_PREFIX)) {
+        return JSON.parse(rawText);
+    }
+
+    if (!DATA_ENCRYPTION_KEY) {
+        throw new Error('Encrypted data present but DATA_ENCRYPTION_KEY is not set');
+    }
+
+    const payloadB64 = rawText.slice(ENCRYPTED_PREFIX.length);
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64').toString('utf8'));
+
+    const iv = Buffer.from(payload.iv, 'base64');
+    const tag = Buffer.from(payload.tag, 'base64');
+    const ciphertext = Buffer.from(payload.data, 'base64');
+
+    const decipher = crypto.createDecipheriv('aes-256-gcm', DATA_ENCRYPTION_KEY, iv);
+    decipher.setAuthTag(tag);
+
+    const plain = Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
+    return JSON.parse(plain);
+}
 
 // ═══════════════════════════════════════════════════════════════
 //                    MEMORY MANAGER CLASS
@@ -108,7 +181,7 @@ class MemoryManagerV3 {
     loadFromDisk() {
         try {
             if (fs.existsSync(MEMORY_FILE)) {
-                const data = JSON.parse(fs.readFileSync(MEMORY_FILE, 'utf-8'));
+                const data = decryptJson(fs.readFileSync(MEMORY_FILE, 'utf-8'));
                 this.workingMemory = data.workingMemory || {};
                 this.shortTermMemory = data.shortTermMemory || {};
                 this.episodicMemory = data.episodicMemory || {};
@@ -119,10 +192,14 @@ class MemoryManagerV3 {
             }
 
             if (fs.existsSync(PROFILES_FILE)) {
-                const profiles = JSON.parse(fs.readFileSync(PROFILES_FILE, 'utf-8'));
+                const profiles = decryptJson(fs.readFileSync(PROFILES_FILE, 'utf-8'));
                 this.profiles = profiles.profiles || {};
                 this.preferences = profiles.preferences || {};
                 logger.memory('Loaded profiles', `${Object.keys(this.profiles).length} profiles`);
+            }
+
+            if (!DATA_ENCRYPTION_KEY) {
+                logger.warn('DATA_ENCRYPTION_KEY not set - memory files are stored unencrypted (development only).');
             }
         } catch (error) {
             logger.error('Failed to load memory', error);
@@ -162,7 +239,7 @@ class MemoryManagerV3 {
             this._writeInProgress = true;
 
             // Save memory (async - non-blocking)
-            const memoryData = JSON.stringify({
+            const memoryData = encryptJson({
                 workingMemory: this.workingMemory,
                 shortTermMemory: this.shortTermMemory,
                 episodicMemory: this.episodicMemory,
@@ -170,13 +247,13 @@ class MemoryManagerV3 {
                 lastAccess: this.lastAccess,
                 messageCount: this.messageCount,
                 savedAt: new Date().toISOString()
-            }, null, 2);
+            });
 
-            const profileData = JSON.stringify({
+            const profileData = encryptJson({
                 profiles: this.profiles,
                 preferences: this.preferences,
                 savedAt: new Date().toISOString()
-            }, null, 2);
+            });
 
             // Use async writes to avoid blocking the event loop
             Promise.all([
@@ -209,7 +286,7 @@ class MemoryManagerV3 {
         // Force synchronous save for shutdown
         if (!this._dirty) return;
         try {
-            fs.writeFileSync(MEMORY_FILE, JSON.stringify({
+            fs.writeFileSync(MEMORY_FILE, encryptJson({
                 workingMemory: this.workingMemory,
                 shortTermMemory: this.shortTermMemory,
                 episodicMemory: this.episodicMemory,
@@ -217,12 +294,12 @@ class MemoryManagerV3 {
                 lastAccess: this.lastAccess,
                 messageCount: this.messageCount,
                 savedAt: new Date().toISOString()
-            }, null, 2));
-            fs.writeFileSync(PROFILES_FILE, JSON.stringify({
+            }));
+            fs.writeFileSync(PROFILES_FILE, encryptJson({
                 profiles: this.profiles,
                 preferences: this.preferences,
                 savedAt: new Date().toISOString()
-            }, null, 2));
+            }));
             this._dirty = false;
         } catch (error) {
             logger.error('Failed to force save memory', error);
@@ -800,7 +877,14 @@ class MemoryManagerV3 {
 
     updateProfile(userId, updates) {
         this.initUserIfNeeded(userId);
-        this.profiles[userId] = {...this.profiles[userId], ...updates};
+        const safeUpdates = {};
+        Object.entries(updates || {}).forEach(([key, value]) => {
+            if (PROFILE_UPDATABLE_FIELDS.has(key)) {
+                safeUpdates[key] = value;
+            }
+        });
+
+        this.profiles[userId] = {...this.profiles[userId], ...safeUpdates};
         this.saveToDisk();
     }
 

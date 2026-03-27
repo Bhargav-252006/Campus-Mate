@@ -9,7 +9,7 @@
  *   chat.messageHandled
  *   tool.executed
  *
- * Subscribers: stats updater, (future) n8n bridge, notifications
+ * Subscribers: stats updater, webhook bridge, notifications
  */
 
 const EventEmitter = require('events');
