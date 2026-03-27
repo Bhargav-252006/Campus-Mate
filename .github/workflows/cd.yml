@@ -52,12 +52,25 @@ jobs:
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success') && secrets.DEPLOY_URL != '' && secrets.DEPLOY_TOKEN != ''
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
 
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check deploy secrets
+        id: deploy_secrets
+        shell: bash
+        run: |
+          if [ -n "${{ secrets.DEPLOY_URL }}" ] && [ -n "${{ secrets.DEPLOY_TOKEN }}" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "Deploy secrets found."
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "Deploy secrets missing. Skipping deploy step."
+          fi
+
       - name: Deploy using webhook
+        if: steps.deploy_secrets.outputs.ready == 'true'
         run: |
           curl -X POST "${{ secrets.DEPLOY_URL }}" \
             -H "Authorization: Bearer ${{ secrets.DEPLOY_TOKEN }}" \
