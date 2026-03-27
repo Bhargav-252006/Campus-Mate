@@ -1,263 +1,155 @@
-# 🚀 Campus Mate - Production Deployment Guide
+# Campus Mate - Production Deployment Guide
 
-## ⚠️ CRITICAL CHECKLIST (Must do before deployment)
+This guide covers production readiness, safe deployment, and operational checks for Campus Mate.
 
-### 1. **Security & Secrets Management**
+## Table of Contents
 
-- [ ] **Generate strong JWT_SECRET** (Not the current placeholder)
-  ```bash
-  openssl rand -base64 32
-  ```
-  Set in: `.env` and `docker-compose.yml` (JWT_SECRET)
+1. [Readiness Checklist](#readiness-checklist)
+2. [Hosting Strategy](#hosting-strategy)
+3. [Environment Setup](#environment-setup)
+4. [Docker Deployment](#docker-deployment)
+5. [Verification](#verification)
+6. [Monitoring and Backups](#monitoring-and-backups)
+7. [Rollback Plan](#rollback-plan)
+8. [Security Notes](#security-notes)
 
-- [ ] **Generate strong WEBHOOK_SECRET**
-  ```bash
-  openssl rand -base64 32
-  ```
-  Set in: `.env` (WEBHOOK_SECRET)
+## Readiness Checklist
 
-- [ ] **Move API keys to secrets manager** (DO NOT commit to Git)
-  - GEMINI_API_KEY
-  - DATABASE_URL
-  - REDIS_URL
-  - SUPABASE_* keys
-  - Use: AWS Secrets Manager, HashiCorp Vault, or your cloud provider's secrets service
+Before release, confirm:
 
-- [ ] **Never commit `.env` to Git**
-  - Ensure `.env` is in `.gitignore`
-  - Use `.env.example` for configuration template only
+- Authentication is required on protected routes.
+- User data is scoped to the authenticated user.
+- Memory and profile storage are encrypted in production.
+- Internal service calls require service-to-service auth.
+- Rate limiting is active on public routes.
+- Logs do not expose tokens, API keys, cookies, or raw message bodies.
+- Smoke tests pass against a real deployment.
 
-- [ ] **Rotate credentials regularly**
-  - Database passwords every 90 days
-  - API keys every 90 days
-  - JWT_SECRET yearly
+## Hosting Strategy
 
-### 2. **Environment Configuration**
+Recommended path:
 
-- [ ] **Update ALLOWED_ORIGINS** in `.env`
-  ```
-  ALLOWED_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
-  ```
-  Remove localhost entries in production
+- Frontend: Netlify or Render static site.
+- Backend services: Render for simplicity, or AWS if you need full control.
+- Database: Supabase or Neon for early-stage hosting.
+- Redis: Upstash for a free or low-cost cache layer.
 
-- [ ] **Set NODE_ENV=production**
-  ```
-  NODE_ENV=production
-  ```
+Use AWS when you need:
 
-- [ ] **Configure LOG_LEVEL**
-  ```
-  LOG_LEVEL=warn  # or 'info' if you need more visibility
-  ```
+- no-sleep production services,
+- stronger network and IAM controls,
+- predictable scaling,
+- or compliance/enterprise requirements.
 
-- [ ] **Set up proper DATABASE_URL**
-  - Verify pooler connection from cloud provider
-  - Test connectivity before deployment
-  - Ensure SSL mode is 'require'
+Use Render/Netlify when you want:
 
-- [ ] **Configure REDIS_URL**
-  - Use production Redis instance (not localhost)
-  - Set up Redis persistence/backups
-  - Configure Redis password
+- lower operational overhead,
+- faster launch,
+- and a simpler deploy workflow.
 
-### 3. **Database & Backend**
+## Environment Setup
 
-- [ ] **Run database migrations**
-  ```bash
-  npm run migrate  # or your migration command
-  ```
+Set these values in your production secret manager or environment:
 
-- [ ] **Verify Supabase connectivity**
-  ```bash
-  npm run check-supabase
-  ```
+```env
+NODE_ENV=production
+ALLOWED_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
+DATABASE_URL=postgresql://user:pass@host:5432/campus_mate
+REDIS_URL=redis://:password@host:6379
+JWT_SECRET=<strong-random-secret>
+INTERNAL_SERVICE_TOKEN=<strong-random-secret>
+DATA_ENCRYPTION_KEY=<strong-random-secret>
+WEBHOOK_SECRET=<strong-random-secret>
+LOG_LEVEL=warn
+```
 
-- [ ] **Test database connection pool**
-  ```bash
-  npm run check-db
-  ```
+Keep `.env` out of git. Use a secrets manager in production.
 
-- [ ] **Verify all microservices start correctly**
-  ```bash
-  docker compose --env-file .env up
-  ```
+## Docker Deployment
 
-### 4. **Frontend Configuration**
+### Build
 
-- [ ] **Build optimized frontend**
-  ```bash
-  cd client && npm run build
-  ```
+```bash
+docker compose -f docker-compose.yml build --force-rm
+```
 
-- [ ] **Update VITE_API_URL** (if using separate API domain)
-  ```
-  VITE_API_URL=https://api.yourdomain.com
-  ```
+### Start
 
-- [ ] **Enable production source maps** (optional, for error tracking)
+```bash
+docker compose --env-file .env -f docker-compose.yml up -d
+```
 
-- [ ] **Test build locally**
-  ```bash
-  npm run preview
-  ```
+### Check status
 
-### 5. **Docker & Deployment**
+```bash
+docker compose ps
+```
 
-- [ ] **Build Docker images with tags**
-  ```bash
-  docker compose -f docker-compose.yml build --force-rm
-  docker tag campus-mate-gateway:latest youregistry/campus-mate-gateway:v1.0
-  ```
+### Health endpoints
 
-- [ ] **Push to container registry**
-  ```bash
-  docker push youregistry/campus-mate-*:v1.0
-  ```
+Verify at least:
 
-- [ ] **Configure container resource limits**
-  - Memory: 512MB-2GB per service
-  - CPU: 0.5-2 cores per service
-  - See `docker-compose.yml` deploy section
+- Gateway `/health`
+- Auth service `/health`
+- Chat service `/health`
+- Data service `/health`
+- Memory service `/health`
+- Analytics service `/health`
+- Webhooks service `/health`
 
-- [ ] **Set up health checks**
-  - All services have `/health` endpoints
-  - Configure liveness/readiness probes
-  - See kubernetes manifest or Docker health checks
+## Verification
 
-### 6. **Infrastructure & Networking**
+Run after deployment:
 
-- [ ] **Enable HTTPS/TLS**
-  - Install SSL certificate (Let's Encrypt or commercial)
-  - Configure nginx/reverse proxy for SSL termination
-  - Redirect HTTP → HTTPS
+1. Create or reuse a session.
+2. Send a chat message.
+3. Read chat history.
+4. Open the dashboard.
+5. Confirm timetable, exams, notes, and schedule still load.
+6. Confirm the session stays alive while you remain active.
 
-- [ ] **Set up firewall rules**
-  - Expose only ports 80, 443 (HTTP/HTTPS)
-  - Block ports 3000-3006 (microservices, internal only)
-  - Lock down Redis port (6379)
-  - Restrict database port (5432)
+Suggested smoke commands:
 
-- [ ] **Configure reverse proxy (nginx)**
-  - SSL certificate setup
-  - Gzip compression
-  - Rate limiting
-  - See `docker/nginx.conf`
+```bash
+npm run smoke-test
+node server/scripts/check-db.js
+node server/scripts/check-redis.js
+```
 
-- [ ] **Set up monitoring & logging**
-  - Application monitoring: DataDog, New Relic, or Prometheus
-  - Log aggregation: ELK Stack, Datadog, or Splunk
-  - Error tracking: Sentry or Rollbar
-  - Performance monitoring: New Relic APM
+## Monitoring and Backups
 
-- [ ] **Enable backups**
-  - Database backups: Daily automated snapshots
-  - Redis backups: Persistence enabled
-  - File storage: Versioning enabled
+Minimum monitoring:
 
-### 7. **Testing & Verification**
+- service uptime,
+- 5xx error rate,
+- response latency,
+- database errors,
+- Redis connectivity,
+- memory usage,
+- and LLM cost/usage spikes.
 
-- [ ] **Smoke tests**
-  ```bash
-  npm run smoke-test
-  ```
-  Tests critical endpoints:
-  - `/health`
-  - `/api/auth/session`
-  - `/api/chat`
-  - `/api/profile`
+Backups:
 
-- [ ] **Load testing** (if expecting traffic)
-  - Use Apache JMeter or Locust
-  - Test 1000+ concurrent users
-  - Measure response times and error rates
+- database snapshots daily,
+- Redis persistence or backup if used,
+- and a tested restore path.
 
-- [ ] **Security scanning**
-  - Run OWASP ZAP or similar
-  - Check for SQL injection vulnerabilities
-  - Verify authentication/authorization
-  - Test file upload restrictions
+## Rollback Plan
 
-- [ ] **End-to-end testing**
-  - Test full user journey:
-    1. Chat message → response
-    2. Profile creation → fetch
-    3. History persistence → retrieval
-    4. Timetable CRUD operations
+If production is unstable:
 
-### 8. **Monitoring & Alerting**
+1. Revert to the last known good image/tag.
+2. Restore the previous environment file or secret version.
+3. Re-run smoke checks.
+4. Confirm chat, auth, and history all work.
 
-- [ ] **Set up alerts for:**
-  - Service crashes (restart count)
-  - Database connection failures
-  - Redis unavailability
-  - API error rates (>5% 5xx errors)
-  - Response time degradation (p95 > 2s)
-  - Disk space < 10% free
-  - Memory usage > 80%
+## Security Notes
 
-- [ ] **Configure log aggregation**
-  - Centralize logs from all services
-  - Set retention: 30-90 days
-  - Index for searchability
-
-- [ ] **Enable distributed tracing**
-  - Track requests across microservices
-  - Use correlation IDs (x-request-id header)
-  - Identify performance bottlenecks
-
-### 9. **Documentation & Runbooks**
-
-- [ ] **Create deployment runbook**
-  - How to deploy new versions
-  - Rollback procedures
-  - Service restart procedure
-
-- [ ] **Create incident response guide**
-  - Database down? → remediation steps
-  - Redis down? → fallback/recovery
-  - Service hung? → debugging/restart
-  - API rate limited? → check logs
-
-- [ ] **Document runtime configuration**
-  - All environment variables
-  - Service dependencies
-  - Port mappings
-  - Database schema version
-
-### 10. **Post-Deployment**
-
-- [ ] **Verify all services are running**
-  ```bash
-  docker compose ps
-  ```
-
-- [ ] **Check service health**
-  - Visit `/health` endpoint for each service
-  - Verify database connectivity
-  - Verify Redis connectivity
-
-- [ ] **Monitor for errors**
-  - Check logs for any startup errors
-  - Monitor error rates for 24 hours
-  - Watch for memory leaks
-
-- [ ] **Performance monitoring**
-  - Baseline response times
-  - Check CPU/memory usage
-  - Verify rate limits are working
-
----
-
-## 🔒 Security Hardening Checklist
-
-- [ ] JWT tokens use strong secret (>256 bits)
-- [ ] CORS origins restricted to your domain(s)
-- [ ] Helmet security headers enabled
-- [ ] Input sanitization active (blocks injection attempts)
-- [ ] Rate limiting enabled on all endpoints
-- [ ] HTTPS enforced (redirect HTTP)
-- [ ] Database credentials not in code
-- [ ] API keys not in code
+- Prefer short-lived credentials for external services.
+- Rotate secrets on a schedule.
+- Keep internal service ports private.
+- Fail closed if required prod secrets are missing.
+- Keep the session cookie active with the sliding auth refresh.
 - [ ] CSP headers configured
 - [ ] HTTPS-only cookies (if using cookies)
 - [ ] Request timeouts configured
