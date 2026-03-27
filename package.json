@@ -1,9 +1,13 @@
 {
     "name": "campus-mate",
     "version": "1.0.0",
-    "description": "Campus Mate - single-command launcher",
+    "description": "Campus Mate - microservices workspace",
     "scripts": {
-        "start": "concurrently --names \"SERVER,CLIENT\" --prefix-colors \"cyan,yellow\" \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+        "start": "npm run start:microservices",
+        "start:microservices": "docker compose --env-file .env -f docker-compose.yml up -d --build",
+        "stop:microservices": "docker compose --env-file .env -f docker-compose.yml down",
+        "logs:microservices": "docker compose --env-file .env -f docker-compose.yml logs -f",
+        "dev:legacy": "concurrently --names \"SERVER,CLIENT\" --prefix-colors \"cyan,yellow\" \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
         "server": "npm run dev --prefix server",
         "client": "npm run dev --prefix client",
         "install:all": "npm install --prefix server && npm install --prefix client",

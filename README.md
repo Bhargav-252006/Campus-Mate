@@ -2,7 +2,9 @@
 
 A voice-enabled, multi-agent AI companion for students that remembers goals, subjects, moods, deadlines, and learning patterns.
 
-Built with React 18 + Vite on the frontend and Node.js + Express on the backend, with a multi-LLM provider chain, tiered memory, specialized agents, and event-driven services.
+Built with React 18 + Vite on the frontend and a Node.js + Express microservices backend, with a multi-LLM provider chain, tiered memory, specialized agents, and event-driven services.
+
+The current production architecture is microservices-first: API Gateway + isolated Auth, Chat, Data, Analytics, Memory, and Webhooks services.
 
 ## Table of Contents
 
@@ -74,13 +76,26 @@ Built with React 18 + Vite on the frontend and Node.js + Express on the backend,
 └──────────────────────────┬────────────────────────────────────────┘
                            │ REST API (JSON)
 ┌──────────────────────────┴────────────────────────────────────────┐
-│                   BACKEND (Express + Node.js)                     │
-│  Routes: chat.js │ timetable.js │ exams.js │ schedule.js │ etc.   │
-│  Services: ConversationService │ ToolService │ ResponsePipeline   │
-│  Agent Layer: CentralizedAgent │ Classifier │ 6 sub-agents         │
-│  Data Layer: MemoryManagerV3 │ Repositories │ DataStore           │
-│  Infrastructure: EventBus │ Feature Flags │ Logger │ Auth (JWT)   │
-└───────────────────────────────────────────────────────────────────┘
+│                 API GATEWAY (Express + Node.js)                   │
+│  /auth /chat /timetable /exams /schedule /profile /stats /memory │
+└──────────────┬───────────────┬───────────────┬───────────────────┘
+     │               │               │
+   ┌──────▼──────┐ ┌──────▼──────┐ ┌─────▼────────┐
+   │ Auth Service│ │ Chat Service│ │ Data Service │
+   └──────┬──────┘ └──────┬──────┘ └─────┬────────┘
+     │               │              │
+   ┌──────▼────────┐ ┌────▼──────────┐ ┌─▼─────────────┐
+   │ Memory Service│ │Analytics Svc  │ │Webhooks Svc   │
+   └───────────────┘ └───────────────┘ └───────────────┘
+```
+
+Shared infrastructure:
+
+- PostgreSQL for persistence
+- Redis for cache and pub/sub
+- Prometheus for monitoring
+
+Legacy monolith files still exist for compatibility and local fallback, but active deployment should target microservices.
 ```
 
 ## Project Structure
@@ -100,16 +115,35 @@ campus-mate/
 │       └── services/
 │           └── api.js
 │
+├── docker/
+│   ├── Dockerfile.gateway
+│   ├── Dockerfile.auth
+│   ├── Dockerfile.chat
+│   ├── Dockerfile.data
+│   ├── Dockerfile.analytics
+│   ├── Dockerfile.memory
+│   ├── Dockerfile.webhooks
+│   └── Dockerfile.client
+├── docker-compose.yml
 └── server/
     ├── package.json
     ├── data/
     ├── logs/
     └── src/
-        ├── app.js
+    ├── app.js                     # legacy monolith entry
         ├── config/
         ├── agents/
         ├── core/
         ├── services/
+    ├── services-isolated/
+    │   ├── auth-service/
+    │   ├── chat-service/
+    │   ├── data-service/
+    │   ├── analytics-service/
+    │   ├── memory-service/
+    │   └── webhooks-service/
+    ├── gateway/
+    ├── shared/
         ├── repositories/
         ├── tools/
         ├── routes/
@@ -149,8 +183,18 @@ Edit `server/.env` with at least one LLM provider key.
 
 ### 3. Run in development
 
+Recommended (microservices):
+
 ```bash
-# Backend
+npm run start:microservices
+```
+
+This launches the API gateway, isolated backend services, frontend container, and Prometheus with Docker Compose.
+
+Legacy mode (single backend + Vite frontend):
+
+```bash
+# Backend (legacy monolith)
 cd server
 npm run dev
 
@@ -159,11 +203,13 @@ cd client
 npm run dev
 ```
 
-You can also use the VS Code task `Campus Mate: Start All` to launch both in parallel.
+You can also use the VS Code task `Campus Mate: Start All` for the legacy dual-process mode.
 
 ### 4. Open the app
 
 Open http://localhost:5173 in your browser.
+
+For microservices Docker mode, frontend is served on http://localhost and API gateway health is at http://localhost:3000/health.
 
 ## LLM Provider Setup
 
