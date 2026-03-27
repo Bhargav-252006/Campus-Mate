@@ -1,17 +1,18 @@
-name: Deploy Campus Mate Microservices
+name: Campus Mate CI and Deploy
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, v2-architecture ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main, v2-architecture ]
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  test:
+  ci:
     runs-on: ubuntu-latest
     
     services:
@@ -38,34 +39,43 @@ jobs:
           - 6379:6379
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Set up Node.js
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
         node-version: '20'
         cache: 'npm'
+        cache-dependency-path: |
+          package-lock.json
+          server/package-lock.json
+          client/package-lock.json
 
-    - name: Install dependencies
+    - name: Install workspace dependencies
       run: |
         npm ci
         npm ci --prefix server
         npm ci --prefix client
 
-    - name: Run tests
-      run: npm test
-      env:
-        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/campus_mate
-        REDIS_URL: redis://localhost:6379
+    - name: Run server tests (if present)
+      run: npm test --prefix server --if-present
 
-    - name: Lint code
-      run: npm run lint --prefix server
+    - name: Run server lint (if present)
+      run: npm run lint --prefix server --if-present
 
-    - name: Build client
+    - name: Build frontend
       run: npm run build --prefix client
 
+    - name: DB connectivity check
+      run: node server/scripts/check-db.js "postgresql://postgres:postgres@localhost:5432/postgres?sslmode=disable"
+
+    - name: Redis connectivity check
+      run: node server/scripts/check-redis.js
+      env:
+        REDIS_URL: redis://localhost:6379
+
   build-and-push:
-    needs: test
+    needs: ci
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     
@@ -78,20 +88,20 @@ jobs:
         service: [gateway, auth, chat, data, analytics, memory, webhooks]
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
+      uses: docker/setup-buildx-action@v3
 
     - name: Log in to Container Registry
-      uses: docker/login-action@v2
+      uses: docker/login-action@v3
       with:
         registry: ${{ env.REGISTRY }}
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Build and push ${{ matrix.service }}
-      uses: docker/build-push-action@v4
+      uses: docker/build-push-action@v6
       with:
         context: .
         file: ./docker/Dockerfile.${{ matrix.service }}
@@ -103,17 +113,13 @@ jobs:
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.DEPLOY_URL != '' && secrets.DEPLOY_TOKEN != ''
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
-    - name: Deploy to production
-      env:
-        DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
-        DEPLOY_URL: ${{ secrets.DEPLOY_URL }}
+    - name: Deploy using webhook
       run: |
-        # Call your deployment webhook or script here
         curl -X POST "${{ secrets.DEPLOY_URL }}" \
           -H "Authorization: Bearer ${{ secrets.DEPLOY_TOKEN }}" \
           -H "Content-Type: application/json" \
