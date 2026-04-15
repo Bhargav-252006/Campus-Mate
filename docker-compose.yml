@@ -1,4 +1,24 @@
 services:
+  # ============ LOCAL POSTGRES DATABASE ============
+  postgres:
+    image: postgres:15-alpine
+    container_name: campus-mate-postgres
+    environment:
+      POSTGRES_DB: campusmate
+      POSTGRES_USER: campusmate
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-campusmate_secret}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./server/scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - campus-mate-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U campusmate -d campusmate"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # ============ CORE SERVICES ============
   api-gateway:
     build:
@@ -24,6 +44,13 @@ services:
       SUPABASE_URL: ${SUPABASE_URL:-}
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: "ap-south-1"
+        awslogs-group: "campus-mate-logs"
+        awslogs-stream: "api-gateway"
+        awslogs-create-group: "true"
     deploy:
       resources:
         limits:
@@ -31,6 +58,8 @@ services:
         reservations:
           memory: 48M
     depends_on:
+      postgres:
+        condition: service_healthy
       auth-service:
         condition: service_healthy
       chat-service:
@@ -61,10 +90,17 @@ services:
       REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
       LOG_LEVEL: ${LOG_LEVEL:-warn}
       NODE_OPTIONS: "--max-old-space-size=80"
-      PG_SSL_REJECT_UNAUTHORIZED: "false"
+
       SUPABASE_URL: ${SUPABASE_URL:-}
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: "ap-south-1"
+        awslogs-group: "campus-mate-logs"
+        awslogs-stream: "auth-service"
+        awslogs-create-group: "true"
     deploy:
       resources:
         limits:
@@ -83,24 +119,34 @@ services:
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       PORT: 3002
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:?GEMINI_API_KEY is required}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-1.5-flash}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-llama-3.3-70b-versatile}
       LOG_LEVEL: ${LOG_LEVEL:-warn}
+      DATA_SERVICE_URL: http://data-service:3003
       MEMORY_SERVICE_URL: http://memory-service:3005
-      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
-      LLM_MODEL: ${LLM_MODEL:-gemini-1.5-flash}
+      LLM_PROVIDER: ${LLM_PROVIDER:-groq}
+      LLM_MODEL: ${LLM_MODEL:-llama-3.3-70b-versatile}
       NODE_OPTIONS: "--max-old-space-size=140"
-      PG_SSL_REJECT_UNAUTHORIZED: "false"
-      SUPABASE_URL: ${SUPABASE_URL:-}
-      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
-      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: "ap-south-1"
+        awslogs-group: "campus-mate-logs"
+        awslogs-stream: "chat-service"
+        awslogs-create-group: "true"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
     deploy:
       resources:
         limits:
-          memory: 160M   # Chat/LLM needs more headroom for response streaming
+          memory: 160M
         reservations:
           memory: 80M
     networks:
@@ -120,10 +166,17 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       LOG_LEVEL: ${LOG_LEVEL:-warn}
       NODE_OPTIONS: "--max-old-space-size=64"
-      PG_SSL_REJECT_UNAUTHORIZED: "false"
+
       SUPABASE_URL: ${SUPABASE_URL:-}
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: "ap-south-1"
+        awslogs-group: "campus-mate-logs"
+        awslogs-stream: "data-service"
+        awslogs-create-group: "true"
     deploy:
       resources:
         limits:
@@ -146,7 +199,7 @@ services:
       REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
       LOG_LEVEL: ${LOG_LEVEL:-warn}
       NODE_OPTIONS: "--max-old-space-size=50"
-      PG_SSL_REJECT_UNAUTHORIZED: "false"
+
       SUPABASE_URL: ${SUPABASE_URL:-}
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
@@ -240,3 +293,7 @@ services:
 networks:
   campus-mate-network:
     driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local

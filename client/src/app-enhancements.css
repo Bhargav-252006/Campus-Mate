@@ -21,13 +21,14 @@
 
 body {
     background:
-        radial-gradient(circle at top left, rgba(99, 102, 241, 0.24), transparent 30%),
-        radial-gradient(circle at top right, rgba(14, 165, 233, 0.18), transparent 28%),
+        radial-gradient(circle at top left, rgba(0, 255, 255, 0.15), transparent 40%),
+        radial-gradient(circle at top right, rgba(13, 234, 252, 0.10), transparent 35%),
         linear-gradient(180deg, var(--bg-base), var(--bg-dark));
 }
 
 .app-container {
     position: relative;
+    background: transparent;
 }
 
 .app-container::before {
@@ -36,9 +37,9 @@ body {
     inset: 0;
     pointer-events: none;
     background:
-        radial-gradient(circle at 20% 20%, rgba(99, 102, 241, 0.10), transparent 0 20%),
-        radial-gradient(circle at 80% 10%, rgba(16, 185, 129, 0.08), transparent 0 18%),
-        radial-gradient(circle at 70% 80%, rgba(245, 158, 11, 0.06), transparent 0 20%);
+        radial-gradient(circle at 20% 20%, rgba(0, 255, 255, 0.08), transparent 0 25%),
+        radial-gradient(circle at 80% 10%, rgba(13, 234, 252, 0.05), transparent 0 20%),
+        radial-gradient(circle at 70% 80%, rgba(59, 130, 246, 0.04), transparent 0 25%);
     z-index: 0;
 }
 
@@ -865,4 +866,155 @@ body {
     .top-header {
         border-radius: 18px;
     }
+}
+
+/* =========================================================
+   🎓 CELESTIAL ARCHITECT: ACTIVE CHAT LAYOUT
+   ========================================================= */
+
+.chat-page {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 120px);
+    border-radius: var(--radius-lg);
+    background: linear-gradient(180deg, var(--bg-card), var(--bg-dark));
+    border: 1px solid var(--border);
+    overflow: hidden;
+    box-shadow: var(--shadow-lg);
+}
+
+.chat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    background: var(--glass);
+    backdrop-filter: blur(40px);
+    border-bottom: 1px solid var(--border);
+    z-index: 10;
+}
+
+.chat-title h1 {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--primary-light);
+    margin: 0;
+}
+
+.messages-container {
+    flex: 1;
+    padding: 30px 24px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.message {
+    display: flex;
+    width: 100%;
+}
+
+.message.bot {
+    justify-content: flex-start;
+}
+
+.message.user {
+    justify-content: flex-end;
+}
+
+.message-bubble {
+    max-width: 80%;
+    padding: 16px 22px;
+    border-radius: var(--radius-xl);
+    line-height: 1.6;
+    font-size: 0.98rem;
+    backdrop-filter: blur(20px);
+    position: relative;
+}
+
+/* AI highly differentiated block */
+.message.bot .message-bubble {
+    background: rgba(4, 30, 48, 0.4); 
+    border-top: 1px solid rgba(0, 255, 255, 0.4);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    border-left: 1px solid rgba(255, 255, 255, 0.05);
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+    border-bottom-left-radius: 8px;
+    box-shadow: 0 10px 40px -10px rgba(0, 255, 255, 0.08);
+}
+
+/* User simple block */
+.message.user .message-bubble {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(15, 23, 42, 0.4));
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    border-bottom-right-radius: 8px;
+}
+
+/* Input floating search bar */
+.chat-input-container {
+    padding: 24px;
+    background: transparent;
+}
+
+.chat-composer {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.chat-input {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    padding: 10px 16px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+    transition: var(--transition);
+}
+
+.chat-input:focus-within {
+    border-color: var(--primary-dark);
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.15);
+    background: var(--bg-card);
+}
+
+.chat-input textarea {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none !important;
+    color: var(--text-primary);
+    font-size: 1rem;
+    padding: 10px 0;
+    max-height: 150px;
+    resize: none;
+}
+
+.send-btn {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: #000;
+    border-radius: var(--radius-full);
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 15px var(--primary-glow);
+    transition: var(--transition);
+}
+
+.send-btn:hover:not(:disabled) {
+    transform: scale(1.05);
+    box-shadow: 0 8px 25px var(--primary-glow);
+}
+
+.send-btn:disabled {
+    background: var(--bg-elevated);
+    color: var(--text-muted);
+    box-shadow: none;
 }

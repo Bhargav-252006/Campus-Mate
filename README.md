@@ -4,6 +4,8 @@ A voice-enabled, multi-agent AI companion for students that remembers goals, sub
 
 Built with React 18 + Vite on the frontend and a Node.js + Express microservices backend, with a multi-LLM provider chain, tiered memory, specialized agents, and event-driven services.
 
+It features the **Celestial Architect (Dim Mode)** UI/UX overhaul natively built into standard CSS, and robust prompt context memory routing for seamless interactions.
+
 The current production architecture is microservices-first: API Gateway + isolated Auth, Chat, Data, Analytics, Memory, and Webhooks services.
 
 ## Table of Contents
@@ -67,10 +69,12 @@ The current production architecture is microservices-first: API Gateway + isolat
 
 ## Architecture
 
+Please review the full microservices topology, LLM orchestration flow, Docker ecosystem, and Database schema in the comprehensive [ARCHITECTURE.md](./ARCHITECTURE.md) flowcharts document.
+
 ```text
 ┌───────────────────────────────────────────────────────────────────┐
 │                   FRONTEND (React 18 + Vite)                      │
-│  Dashboard │ Timetable │ Exams │ Schedule │ Chat │ 12+ more       │
+│  "Celestial Architect" Dim Mode Aesthetic + Glassmorphism UI      │
 │  Context: ThemeProvider │ ToastProvider │ KeyboardShortcuts       │
 │  Services: api.js (Axios) │ VoiceInput (Web Speech API)          │
 └──────────────────────────┬────────────────────────────────────────┘
@@ -90,13 +94,11 @@ The current production architecture is microservices-first: API Gateway + isolat
 ```
 
 Shared infrastructure:
+- PostgreSQL for persistent artifacts (`init-db.sql`)
+- Redis for caching / transient storage
+- Docker Compose ecosystem running securely behind the AWS `api-network`
 
-- PostgreSQL for persistence
-- Redis for cache and pub/sub
-- Prometheus for monitoring
-
-Legacy monolith files still exist for compatibility and local fallback, but active deployment should target microservices.
-```
+Legacy monolith files still exist for compatibility, but active deployment targets containerized microservices.
 
 ## Project Structure
 
@@ -362,17 +364,19 @@ User Message
 | Quiz | generate/submit/review | quiz me on data structures |
 | Search | web/wikipedia/youtube | search YouTube for calculus tutorials |
 
-## Memory System
+## Memory System 🧠
 
-MemoryManagerV3 provides persistent memory:
+Campus Mate utilizes a tiered Memory System to power AI interactions seamlessly without running out of context limits.
 
-| Tier | Purpose | Retention |
-|---|---|---|
-| Working | Current context | Session-scoped |
-| Short-term | Recent interactions | Hours to days |
-| Episodic | Conversation episodes | Weeks |
-| Semantic | Extracted facts | Permanent |
-| Profile | Preferences and style | Permanent |
+| Tier | Purpose | Retention | Mechanism |
+|---|---|---|---|
+| Working | Current context | Session-scoped | Active API Buffer Arrays |
+| Short-term | Recent interactions | Hours to days | `chat_messages` Postgres storage |
+| Episodic | Conversation episodes | Weeks | LLM semantic snapshots |
+| Semantic | Extracted facts | Permanent | Redis / Data Layer mappings |
+| Profile | Preferences and style | Permanent | Authentication hooks |
+
+**Memory Amnesia Patched**: LLM endpoints specifically process memory cleanly using native role mappings (`role: 'system'` vs `'model'` vs `'user'`) instead of monolithic string duplication, preventing prompt injection overlap and ensuring references (like "what is it") are instantly understood.
 
 ## Services Layer
 

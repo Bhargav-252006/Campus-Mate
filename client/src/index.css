@@ -3,114 +3,90 @@ CAMPUS MATE — Child-Friendly Colorful Theme CSS
 Playful, Warm & Engaging UI for Students
 ═══════════════════════════════════════════════════════════════ */
 
-/* ============ CSS VARIABLES — CHILD-FRIENDLY LIGHT THEME (DEFAULT) ============ */
+/* ============ CSS VARIABLES — CELESTIAL ARCHITECT (NEON CYAN DIM MODE) ============ */
 :root {
-  /* PASTEL RAINBOW - Soft & Kid-Friendly */
-  --primary: #F9A8D4;           /* Soft Pink - primary actions */
-  --primary-dark: #F472B6;      /* Deeper pink */
-  --primary-light: #FBCFE8;     /* Light pink */
-  --primary-glow: rgba(249, 168, 212, 0.4);
+  /* NEON CYAN - The Spark of Intelligence */
+  --primary: #00FFFF;           /* Vibrant Neon Cyan */
+  --primary-dark: #00E6E6;      /* Slightly deeper cyan */
+  --primary-light: #C1FFFE;     /* Light glowing cyan */
+  --primary-glow: rgba(0, 255, 255, 0.4);
   
-  --secondary: #A7F3D0;         /* Mint green - success, secondary */
-  --secondary-dark: #6EE7B7;    /* Deeper mint */
-  --secondary-light: #D1FAE5;   /* Light mint */
-  --secondary-glow: rgba(167, 243, 208, 0.4);
+  --secondary: #0DEAFC;         /* Cool blue/cyan alternate */
+  --secondary-dark: #00DBEC;    
+  --secondary-light: #E5FCFF;   
+  --secondary-glow: rgba(13, 234, 252, 0.3);
   
-  --accent-yellow: #FDE68A;     /* Soft sunshine - highlights, badges */
-  --accent-blue: #7DD3FC;       /* Sky blue - info, links */
-  --accent-purple: #C4B5FD;     /* Lavender - subtle accents */
-  --accent-orange: #FED7AA;     /* Soft peach - warm accents */
+  --accent-yellow: #FDE68A;     /* For warnings */
+  --accent-blue: #3B82F6;       
+  --accent-purple: #8B5CF6;     
+  --accent-orange: #F59E0B;     
   
-  --success: #6EE7B7;           /* Mint green */
-  --success-glow: rgba(110, 231, 183, 0.3);
-  --warning: #FDE68A;           /* Soft yellow */
-  --warning-glow: rgba(253, 230, 138, 0.3);
-  --danger: #FCA5A5;            /* Soft salmon/coral (NOT red) */
-  --danger-glow: rgba(252, 165, 165, 0.3);
-  --info: #7DD3FC;              /* Sky blue */
+  --success: #10B981;           
+  --success-glow: rgba(16, 185, 129, 0.3);
+  --warning: #F59E0B;           
+  --warning-glow: rgba(245, 158, 11, 0.3);
+  --danger: #EF4444;            
+  --danger-glow: rgba(239, 68, 68, 0.3);
+  --info: #3B82F6;              
 
-  /* Warm, creamy surfaces - no dark colors */
-  --bg-base: #FFF8F0;           /* Warm cream */
-  --bg-dark: #FFF5E6;           /* Slightly darker cream */
-  --bg-sidebar: #FFFFFF;        /* Pure white */
-  --bg-card: #FFFFFF;           /* Pure white cards */
-  --bg-card-hover: #FFF5F5;     /* Slight coral tint */
-  --bg-input: #FFF0E8;          /* Warm input bg */
-  --bg-elevated: #FFFFFF;       /* Elevated surfaces */
-  --bg-overlay: rgba(0, 0, 0, 0.15);
+  /* DIM MODE SURFACES - Deep slate grays, not pure black, significantly lighter than obsidian */
+  --bg-base: #1E293B;           /* Deep slate floor */
+  --bg-dark: #0F172A;           /* Lower atmospheric layer */
+  --bg-sidebar: #1E293B;        
+  --bg-card: #334155;           /* Floating workspace */
+  --bg-card-hover: #475569;     /* Interactive highlight */
+  --bg-input: #0F172A;          /* Recessed inputs */
+  --bg-elevated: #475569;       /* Highest focal points */
+  --bg-overlay: rgba(15, 23, 42, 0.7);
   
-  /* Playful glass effects with warm tones */
-  --glass: rgba(255, 255, 255, 0.85);
-  --glass-border: rgba(255, 107, 107, 0.15);
-  --glass-hover: rgba(255, 107, 107, 0.08);
-
-  /* Text - warm and readable */
-  --text-primary: #2D3436;      /* Warm dark gray */
-  --text-secondary: #636E72;    /* Medium gray */
-  --text-muted: #B2BEC3;        /* Light gray */
-  --text-inverse: #FFFFFF;
-
-  /* Soft borders */
-  --border: rgba(45, 52, 54, 0.08);
-  --border-strong: rgba(45, 52, 54, 0.15);
-  --border-active: rgba(255, 107, 107, 0.5);
-
-  /* Soft, friendly shadows */
-  --shadow-sm: 0 2px 8px -2px rgba(255, 107, 107, 0.15);
-  --shadow: 0 8px 24px -8px rgba(255, 107, 107, 0.2);
-  --shadow-lg: 0 16px 48px -12px rgba(255, 107, 107, 0.25);
-  --shadow-glow: 0 0 30px -8px var(--primary-glow);
-  --shadow-card: 0 4px 16px -4px rgba(255, 107, 107, 0.15);
-
-  /* Playful rounded corners */
-  --radius-xs: 8px;
-  --radius-sm: 12px;
-  --radius: 16px;
-  --radius-lg: 20px;
-  --radius-xl: 28px;
-  --radius-full: 9999px;
-
-  /* Bouncy transitions */
-  --ease: cubic-bezier(0.4, 0, 0.2, 1);
-  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
-  --duration: 0.3s;
-  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-slow: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-
-  /* Layout */
-  --sidebar-width: 260px;
-  --sidebar-collapsed: 72px;
-  --header-height: 60px;
-  --content-max: 1280px;
-}
-
-/* ============ DARK THEME (Optional - but we recommend light for kids) ============ */
-[data-theme="dark"] {
-  --bg-base: #1a1a2e;
-  --bg-dark: #16162a;
-  --bg-sidebar: #1e1e38;
-  --bg-card: #252545;
-  --bg-card-hover: #2d2d55;
-  --bg-input: #2a2a50;
-  --bg-elevated: #303060;
-  --bg-overlay: rgba(0, 0, 0, 0.5);
+  /* FROSTED GLASS EFFECTS - High blur, soft lift */
   --glass: rgba(255, 255, 255, 0.05);
   --glass-border: rgba(255, 255, 255, 0.1);
   --glass-hover: rgba(255, 255, 255, 0.08);
 
-  --text-primary: #f0f0f5;
-  --text-secondary: #c0c0d0;
-  --text-muted: #808090;
-  --text-inverse: #1a1a2e;
+  /* TYPE & CONTRAST */
+  --text-primary: #F1F5F9;      
+  --text-secondary: #94A3B8;    
+  --text-muted: #64748B;        
+  --text-inverse: #0F172A;
 
+  /* BORDERS - Ghost edges */
   --border: rgba(255, 255, 255, 0.1);
-  --border-strong: rgba(255, 255, 255, 0.18);
-  --border-active: rgba(255, 107, 107, 0.5);
+  --border-strong: rgba(255, 255, 255, 0.2);
+  --border-active: rgba(0, 255, 255, 0.5);
 
-  --shadow-sm: 0 2px 8px -2px rgba(0, 0, 0, 0.4);
-  --shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.5);
-  --shadow-lg: 0 16px 48px -12px rgba(0, 0, 0, 0.6);
-  --shadow-card: 0 4px 16px -4px rgba(0, 0, 0, 0.4);
+  /* SHADOWS & NEON GLOWS */
+  --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  --shadow-glow: 0 0 30px -8px var(--primary-glow);
+  --shadow-card: 0 4px 16px -4px rgba(0, 0, 0, 0.3);
+
+  /* PREMIUM ARCHITECTURE CORNERS */
+  --radius-xs: 8px;
+  --radius-sm: 12px;
+  --radius: 16px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
+  --radius-full: 9999px;
+
+  /* FLUID TRANSITIONS */
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --duration: 0.25s;
+  --transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  --transition-slow: all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* Layout */
+  --sidebar-width: 280px;
+  --sidebar-collapsed: 80px;
+  --header-height: 64px;
+  --content-max: 1400px;
+}
+
+/* ============ DARK THEME (MAPPED TO THE SAME DIM ARCHITECTURE) ============ */
+[data-theme="dark"] {
+  /* Defaults to the same premium UI */
 }
 
 /* ============ RESET & BASE ============ */
