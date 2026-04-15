@@ -92,8 +92,8 @@ Campus Mate is now organized as 7 independent microservices that communicate via
 
 2. **Configure environment**
    ```bash
-   cp .env.docker-compose .env.local
-   # Edit .env.local with your Gemini API key
+   cp .env.example .env
+   # Edit .env with your keys and infrastructure URLs
    ```
 
 3. **Start all services**

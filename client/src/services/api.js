@@ -5,6 +5,7 @@ const envApiUrl = (import.meta.env.VITE_API_URL || '').trim();
 const shouldSkipEnvApiUrl = (url) => /^https:\/\/localhost(?::\d+)?$/i.test(url);
 const SESSION_STORAGE_KEY = 'campusMate_userId';
 const LEGACY_SESSION_STORAGE_KEY = 'student_mate_userId';
+const CONVERSATION_STORAGE_KEY = 'campusMate_conversationId';
 
 const getApiBaseCandidates = () => {
     const candidates = [];
@@ -114,22 +115,43 @@ export const initSession = async () => {
 
 export const getSessionUserId = () => sessionUserId;
 
+export const getConversationId = () => localStorage.getItem(CONVERSATION_STORAGE_KEY) || null;
+
+export const setConversationId = (conversationId) => {
+    if (conversationId) {
+        localStorage.setItem(CONVERSATION_STORAGE_KEY, conversationId);
+    }
+};
+
+export const clearConversationId = () => {
+    localStorage.removeItem(CONVERSATION_STORAGE_KEY);
+};
+
 // ============ CHAT ============
 // Server derives userId from JWT token — no need to send in body/query
 export const sendMessageToAgent = async (message, userId, clientRequestId) => {
+    const conversationId = getConversationId();
     const response = await api.post('/chat', {
         message,
+        conversationId,
         clientRequestId
     });
+
+    if (response.data?.conversationId) {
+        setConversationId(response.data.conversationId);
+    }
+
     return {
         ...response.data,
         response: response.data.response || response.data.message || ''
     };
 };
 
-export const getChatHistory = async (userId) => {
+export const getChatHistory = async (userId, conversationId = null) => {
     try {
-        const response = await api.get('/chat/history');
+        const response = await api.get('/chat/history', {
+            params: conversationId ? {conversationId} : {}
+        });
         return response.data;
     } catch (err) {
         console.warn('Failed to load chat history', err?.message);
@@ -139,6 +161,7 @@ export const getChatHistory = async (userId) => {
 
 export const clearChatHistory = async (userId) => {
     await api.delete('/chat/history');
+    clearConversationId();
 };
 
 // ============ TIMETABLE ============

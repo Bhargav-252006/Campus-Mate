@@ -97,9 +97,9 @@ docker exec campus-mate-postgres psql \
 
 ```bash
 # Copy environment template
-cp .env.services .env.local
+cp .env.example .env
 
-# Edit .env.local with your Gemini API key
+# Edit .env with your Gemini API key
 # GEMINI_API_KEY=AIza...
 ```
 
@@ -413,7 +413,7 @@ FLUSHDB
 
 ```bash
 # 1. Configure environment
-cp .env.services .env
+cp .env.example .env
 # Edit .env with production values
 
 # 2. Build images
@@ -553,7 +553,7 @@ RATE_LIMIT_WINDOW=60000
 
 - **Architecture Docs**: [docs/architecture/](architecture/)
 - **API Documentation**: Check each service `/health` endpoint
-- **Environment Variables**: See `.env.services`
+- **Environment Variables**: See `.env.example`
 - **Database Schema**: See `server/scripts/init-db.sql`
 
 ---

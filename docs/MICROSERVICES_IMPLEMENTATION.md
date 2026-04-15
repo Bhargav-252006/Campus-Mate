@@ -43,7 +43,7 @@ Your Campus Mate project has been successfully **converted from a monolithic arc
 
 ### Configuration & Deployment
 - **`docker-compose.yml`** - Full stack Docker orchestration (updated)
-- **`.env.services`** - Comprehensive environment variables template
+- **`.env.example`** - Comprehensive environment variables template
 - **`ecosystem.config.js`** - PM2 configuration for local development
 - **`docs/MICROSERVICES_GUIDE.md`** - 200+ line deployment & startup guide
 
@@ -199,7 +199,7 @@ POST   /webhooks/n8n              # N8N webhook
 docker-compose up -d postgres redis
 
 # 2. Copy environment template
-cp .env.services .env.local
+cp .env.example .env
 
 # 3. Install dependencies
 npm install
@@ -271,7 +271,7 @@ curl http://localhost:3003/health    # Data
 - **Client**: Port 5173
 
 ### Environment Variables
-Copy `.env.services` to `.env.local` and configure:
+Copy `.env.example` to `.env` and configure:
 ```env
 LLM_PROVIDER=gemini            # LLM provider
 LLM_MODEL=gemini-2.5-flash     # Model ID
@@ -288,7 +288,7 @@ REDIS_URL=redis://...
 
 1. **`docs/MICROSERVICES_GUIDE.md`** - Complete startup & deployment guide (recommended!)
 2. **`server/scripts/init-db.sql`** - Database schema
-3. **`.env.services`** - All configurable environment variables
+3. **`.env.example`** - All configurable environment variables
 4. **`ecosystem.config.js`** - PM2 process manager config
 5. **`docker-compose.yml`** - Docker orchestration config
 

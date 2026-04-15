@@ -1,6 +1,6 @@
 import React, {useState, useEffect, useRef} from 'react';
 import {Send, Mic, MicOff, Volume2, VolumeX, Trash2, Bot} from 'lucide-react';
-import {sendMessageToAgent, getChatHistory, clearChatHistory, getSessionUserId} from '../services/api';
+import {sendMessageToAgent, getChatHistory, clearChatHistory, getSessionUserId, setConversationId} from '../services/api';
 import ReactMarkdown from 'react-markdown';
 
 // Emoji regex extracted as a constant to avoid duplication
@@ -349,6 +349,10 @@ const Chat = () => {
 
         try {
             const response = await sendMessageToAgent(finalText, userId, clientRequestId);
+
+            if (response.conversationId) {
+                setConversationId(response.conversationId);
+            }
 
             const botMessage = {
                 id: buildMessageId(),

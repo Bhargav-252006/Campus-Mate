@@ -33,6 +33,8 @@ app.use((req, res, next) => {
 });
 
 // ============ HTTPS ENFORCEMENT (if behind reverse proxy) ============
+// Disabled for EC2 IP-based deployment (no SSL config yet)
+/*
 if (process.env.NODE_ENV === 'production') {
     app.use((req, res, next) => {
         // If behind proxy and not HTTPS, redirect only for non-local hosts.
@@ -44,6 +46,7 @@ if (process.env.NODE_ENV === 'production') {
         next();
     });
 }
+*/
 
 // ============ MIDDLEWARE ============
 app.use(helmet());

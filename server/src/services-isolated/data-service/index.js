@@ -9,29 +9,13 @@ const {cache} = require('../shared/redis');
 
 const app = express();
 const PORT = process.env.PORT || 3003;
-const INTERNAL_SERVICE_TOKEN = process.env.INTERNAL_SERVICE_TOKEN || '';
-const warnedNoInternalToken = {value: false};
 
 app.use(express.json());
 
-app.use((req, res, next) => {
-    if (!INTERNAL_SERVICE_TOKEN) {
-        if (process.env.NODE_ENV === 'production') {
-            return res.status(503).json({error: 'Internal auth is not configured'});
-        }
-        if (!warnedNoInternalToken.value) {
-            warnedNoInternalToken.value = true;
-            logger.warn('INTERNAL_SERVICE_TOKEN not set; isolated data-service auth is relaxed in development only.');
-        }
-        return next();
-    }
+// ============ ENDPOINTS ============
 
-    const provided = req.headers['x-internal-token'];
-    if (provided !== INTERNAL_SERVICE_TOKEN) {
-        return res.status(401).json({error: 'Unauthorized internal request'});
-    }
-
-    return next();
+app.get('/health', (req, res) => {
+    res.json({status: 'OK', service: 'Data Service'});
 });
 
 const userId = req => req.headers['x-user-id'];
@@ -42,12 +26,6 @@ app.use((req, res, next) => {
         return res.status(400).json({error: 'Missing x-user-id header'});
     }
     return next();
-});
-
-// ============ ENDPOINTS ============
-
-app.get('/health', (req, res) => {
-    res.json({status: 'OK', service: 'Data Service'});
 });
 
 // ============ TIMETABLE CRUD ============

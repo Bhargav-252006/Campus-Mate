@@ -153,15 +153,15 @@ const Layout = () => {
             <aside className={`sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
                 {/* Logo Area */}
                 <div className="logo-container">
-                    <div className="logo-icon bg-gradient-to-br from-indigo-500 to-purple-500 p-2 rounded-lg">
-                        <GraduationCap size={28} className="text-white" />
+                    <div className="logo-icon">
+                        <GraduationCap size={28} />
                     </div>
-                    <span>StudentMate</span>
+                    <span>Campus Mate</span>
                 </div>
 
                 {/* Navigation */}
                 <div className="nav-scroll">
-                    <nav className="flex flex-col gap-2">
+                    <nav>
                         {navItems.map((item) => (
                             <NavLink
                                 key={item.path}
@@ -178,17 +178,17 @@ const Layout = () => {
 
                 {/* User Profile / Bottom Actions */}
                 <div className="user-profile">
-                    <div className={`flex items-center gap-3 ${!sidebarOpen && 'justify-center'}`}>
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 flex items-center justify-center text-white font-bold shadow-lg">
+                    <div className="user-profile-inner">
+                        <div className="user-avatar">
                             SM
                         </div>
                         {sidebarOpen && (
-                            <div className="flex-1 min-w-0">
-                                <p className="text-sm font-semibold text-white truncate">Student User</p>
-                                <p className="text-xs text-gray-400 truncate">Free Plan</p>
+                            <div className="user-info">
+                                <p className="user-name">Student User</p>
+                                <p className="user-plan">Free Plan</p>
                             </div>
                         )}
-                        {sidebarOpen && <Settings size={18} className="text-gray-400 cursor-pointer hover:text-white" />}
+                        {sidebarOpen && <Settings size={18} className="user-settings-icon" />}
                     </div>
                 </div>
             </aside>
@@ -197,8 +197,8 @@ const Layout = () => {
             <div className="main-wrapper">
                 {/* Floating Header */}
                 <header className="top-header">
-                    <div className="flex items-center gap-4">
-                        <button className="menu-btn p-2 hover:bg-white/5 rounded-lg transition-colors" onClick={() => setSidebarOpen(!sidebarOpen)}>
+                    <div className="header-left">
+                        <button className="menu-btn" onClick={() => setSidebarOpen(!sidebarOpen)}>
                             {sidebarOpen ? <X size={24} /> : <Menu size={24} />}
                         </button>
                         <div className="header-title">
@@ -221,7 +221,7 @@ const Layout = () => {
 
                 {/* Page Content */}
                 <main className="page-content">
-                    <div className="mx-auto max-w-7xl animate-fade-in">
+                    <div className="page-content-inner">
                         <Outlet />
                     </div>
                 </main>
