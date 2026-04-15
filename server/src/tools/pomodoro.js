@@ -1,18 +1,17 @@
 /**
  * 🍅 POMODORO TOOLS - Start/end sessions, get stats
+ *
+ * A1-A2 fix: Delegates to pomodoroRepo (single source of truth for pomodoro.json)
  */
-const {loadJSON, saveJSON, generateId, dataPath, logger} = require('./base');
+const {logger} = require('./base');
+const {generateId} = require('./base');
+const {pomodoroRepo} = require('../repositories');
 
-const POMODORO_FILE = dataPath('pomodoro.json');
-let pomodoro = loadJSON(POMODORO_FILE, {});
+async function startPomodoro({subject, duration = 25, breakTime = 5}, userId) {
+    const data = await pomodoroRepo.getUserData(userId);
 
-function startPomodoro({subject, duration = 25, breakTime = 5}, userId) {
-    if (!pomodoro[userId]) {
-        pomodoro[userId] = {sessions: [], currentSession: null, totalFocusTime: 0, streak: 0};
-    }
-
-    if (pomodoro[userId].currentSession) {
-        const active = pomodoro[userId].currentSession;
+    if (data.currentSession) {
+        const active = data.currentSession;
         return {
             message: `\ud83c\udf45 You already have an active pomodoro for "${active.subject}"! Say "end pomodoro" first.`,
             session: active,
@@ -26,8 +25,8 @@ function startPomodoro({subject, duration = 25, breakTime = 5}, userId) {
         completed: false, interruptions: 0
     };
 
-    pomodoro[userId].currentSession = session;
-    saveJSON(POMODORO_FILE, pomodoro);
+    data.currentSession = session;
+    await pomodoroRepo.setUserData(userId, data);
     logger.debug(`Pomodoro started for ${userId}: ${subject}`);
 
     return {
@@ -37,12 +36,14 @@ function startPomodoro({subject, duration = 25, breakTime = 5}, userId) {
     };
 }
 
-function endPomodoro({completed = true, notes = ''}, userId) {
-    if (!pomodoro[userId]?.currentSession) {
+async function endPomodoro({completed = true, notes = ''}, userId) {
+    const data = await pomodoroRepo.getUserData(userId);
+
+    if (!data.currentSession) {
         return {success: false, message: 'No active pomodoro session'};
     }
 
-    const session = pomodoro[userId].currentSession;
+    const session = data.currentSession;
     session.endedAt = new Date().toISOString();
     session.completed = completed;
     session.notes = notes;
@@ -53,28 +54,28 @@ function endPomodoro({completed = true, notes = ''}, userId) {
     session.actualMinutes = actualMinutes;
 
     if (completed) {
-        pomodoro[userId].totalFocusTime += actualMinutes;
-        pomodoro[userId].streak += 1;
+        data.totalFocusTime += actualMinutes;
+        data.streak += 1;
     } else {
-        pomodoro[userId].streak = 0;
+        data.streak = 0;
     }
 
-    pomodoro[userId].sessions.push(session);
-    pomodoro[userId].currentSession = null;
-    saveJSON(POMODORO_FILE, pomodoro);
+    data.sessions.push(session);
+    data.currentSession = null;
+    await pomodoroRepo.setUserData(userId, data);
 
     const emoji = completed ? '✅' : '⏹️';
     return {
         success: true,
         message: `${emoji} Pomodoro ${completed ? 'completed' : 'ended'}! You focused for ${actualMinutes} minutes.`,
-        session, streak: pomodoro[userId].streak,
-        totalFocusTime: pomodoro[userId].totalFocusTime,
+        session, streak: data.streak,
+        totalFocusTime: data.totalFocusTime,
         suggestion: completed ? `Great job! Take a ${session.breakTime} minute break! 🧘` : 'No worries! Try again when you\'re ready.'
     };
 }
 
-function getPomodoroStats({period = 'week'}, userId) {
-    const data = pomodoro[userId] || {sessions: [], totalFocusTime: 0, streak: 0};
+async function getPomodoroStats({period = 'week'}, userId) {
+    const data = await pomodoroRepo.getUserData(userId);
     const now = new Date();
     const periodStart = new Date();
 
@@ -82,7 +83,7 @@ function getPomodoroStats({period = 'week'}, userId) {
     else if (period === 'week') periodStart.setDate(now.getDate() - 7);
     else if (period === 'month') periodStart.setMonth(now.getMonth() - 1);
 
-    const recentSessions = data.sessions.filter(s => new Date(s.startedAt) >= periodStart);
+    const recentSessions = (data.sessions || []).filter(s => new Date(s.startedAt) >= periodStart);
     const completedSessions = recentSessions.filter(s => s.completed);
     const totalMinutes = completedSessions.reduce((sum, s) => sum + (s.actualMinutes || 0), 0);
 

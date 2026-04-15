@@ -1,9 +1,10 @@
-const {callLLM} = require('../utils/llmService');
-const {getStudentMatePersona, getAdaptiveTone, getContinuityPrompt} = require('./studentMatePersona');
+const {BaseAgent} = require('./BaseAgent');
 
 /**
  * CONCEPT GAP AGENT - Specialized for Finding Missing Knowledge
  * Uses unified Student Mate persona for supportive diagnostic learning
+ *
+ * Extra methods: getPrerequisites()
  */
 
 const AGENT_CONFIG = {
@@ -18,7 +19,6 @@ const AGENT_CONFIG = {
         'fundamentals', 'basics', 'foundation'
     ],
 
-    // Common prerequisite chains (what topic requires what prior knowledge)
     prerequisiteChains: {
         calculus: ['algebra', 'functions', 'limits', 'trigonometry'],
         derivatives: ['limits', 'slopes', 'rate of change'],
@@ -81,51 +81,16 @@ NEVER:
 Remember: Everyone has gaps. You're a friendly detective, not a judge! 🔍`
 };
 
-class ConceptGapAgent {
+class ConceptGapAgent extends BaseAgent {
     constructor() {
-        this.config = AGENT_CONFIG;
-    }
-
-    async handle(message, context = '', userPatterns = {}, profile = {}) {
-        console.log(`[${this.config.name}] Diagnosing concept gaps...`);
-
-        // Build unified Student Mate persona + agent specialization
-        const personaPrompt = getStudentMatePersona(profile, context, this.config.specialization);
-        const tonePrompt = getAdaptiveTone(userPatterns);
-        const continuityPrompt = getContinuityPrompt();
-
-        const fullSystemPrompt = personaPrompt + this.config.agentInstructions + tonePrompt + continuityPrompt;
-
-        // Build user prompt with topic context
-        const userPrompt = this.buildPrompt(message, userPatterns);
-
-        // Call LLM with unified persona
-        const llmResponse = await callLLM(
-            fullSystemPrompt,
-            userPrompt,
-            {
-                maxTokens: this.config.maxTokens,
-                temperature: this.config.temperature,
-                taskType: 'teaching'  // Use main model for gap identification
-            }
-        );
-
-        if (llmResponse) {
-            return llmResponse;
-        }
-
-        // Friendly fallback
-        return this.getFriendlyFallback(message, profile);
+        super(AGENT_CONFIG);
     }
 
     buildPrompt(message, userPatterns) {
         let prompt = '';
-
-        // Add known knowledge gaps if tracked
         if (userPatterns?.knowledgeGaps && userPatterns.knowledgeGaps.length > 0) {
             prompt += `Note: This student has previously shown gaps in: ${userPatterns.knowledgeGaps.join(', ')}.\n\n`;
         }
-
         prompt += `Student says: ${message}`;
         return prompt;
     }
@@ -150,7 +115,6 @@ Once we find the gap, I'll help you fill it - and then the rest will click! ✨
 What are you trying to understand?`;
     }
 
-    // Check if a topic has known prerequisites
     getPrerequisites(topic) {
         const lowerTopic = topic.toLowerCase();
         for (const [key, prereqs] of Object.entries(this.config.prerequisiteChains)) {
@@ -163,6 +127,3 @@ What are you trying to understand?`;
 }
 
 module.exports = new ConceptGapAgent();
-
-
-

@@ -22,9 +22,7 @@ import {
     Moon,
     Download,
     Upload,
-    LogOut,
-    Settings,
-    Search
+    Settings
 } from 'lucide-react';
 import {useTheme} from '../context/ThemeContext';
 import {useToast} from '../context/ToastContext';
@@ -46,19 +44,20 @@ const navItems = [
     {path: '/app/analytics', icon: BarChart3, label: 'Analytics'},
 ];
 
-// Export/Import functions (kept from original)
+// Allowed keys for import/export — prevents arbitrary localStorage writes
+const ALLOWED_DATA_KEYS = new Set([
+    'flashcardDecks', 'habits', 'gradeCourses', 'targetGPA',
+    'resourceLibrary', 'resourceFolders', 'notes', 'moodEntries',
+    'deadlines', 'pomodoroStats', 'chatHistory', 'timetable',
+    'exams', 'schedule', 'focusModeSettings', 'focusTodaySessions',
+    'theme'
+]);
+
+// Export/Import functions
 const exportAllData = (toast) => {
     try {
         const data = {};
-        const keys = [
-            'flashcardDecks', 'habits', 'gradeCourses', 'targetGPA',
-            'resourceLibrary', 'resourceFolders', 'notes', 'moodEntries',
-            'deadlines', 'pomodoroStats', 'chatHistory', 'timetable',
-            'exams', 'schedule', 'focusModeSettings', 'focusTodaySessions',
-            'theme'
-        ];
-
-        keys.forEach(key => {
+        for (const key of ALLOWED_DATA_KEYS) {
             const value = localStorage.getItem(key);
             if (value) {
                 try {
@@ -67,7 +66,7 @@ const exportAllData = (toast) => {
                     data[key] = value;
                 }
             }
-        });
+        }
 
         const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
         const url = URL.createObjectURL(blob);
@@ -92,14 +91,37 @@ const importData = (toast) => {
         const file = e.target.files[0];
         if (!file) return;
 
+        // S9 fix: Reject suspiciously large files (>5 MB)
+        if (file.size > 5 * 1024 * 1024) {
+            toast.error('Backup file is too large (max 5 MB)');
+            return;
+        }
+
         const reader = new FileReader();
         reader.onload = (event) => {
             try {
                 const data = JSON.parse(event.target.result);
-                Object.entries(data).forEach(([key, value]) => {
-                    localStorage.setItem(key, JSON.stringify(value));
-                });
-                toast.success('Data imported! Refreshing...');
+
+                if (typeof data !== 'object' || Array.isArray(data)) {
+                    toast.error('Invalid backup file format');
+                    return;
+                }
+
+                // S9 fix: Only import whitelisted keys
+                let importedCount = 0;
+                for (const [key, value] of Object.entries(data)) {
+                    if (ALLOWED_DATA_KEYS.has(key)) {
+                        localStorage.setItem(key, JSON.stringify(value));
+                        importedCount++;
+                    }
+                }
+
+                if (importedCount === 0) {
+                    toast.error('No valid data found in backup file');
+                    return;
+                }
+
+                toast.success(`Imported ${importedCount} items! Refreshing...`);
                 setTimeout(() => window.location.reload(), 1500);
             } catch (error) {
                 toast.error('Invalid backup file');
@@ -131,15 +153,15 @@ const Layout = () => {
             <aside className={`sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
                 {/* Logo Area */}
                 <div className="logo-container">
-                    <div className="logo-icon bg-gradient-to-br from-indigo-500 to-purple-500 p-2 rounded-lg">
-                        <GraduationCap size={28} className="text-white" />
+                    <div className="logo-icon">
+                        <GraduationCap size={28} />
                     </div>
-                    <span>StudentMate</span>
+                    <span>Campus Mate</span>
                 </div>
 
                 {/* Navigation */}
                 <div className="nav-scroll">
-                    <nav className="flex flex-col gap-2">
+                    <nav>
                         {navItems.map((item) => (
                             <NavLink
                                 key={item.path}
@@ -156,17 +178,17 @@ const Layout = () => {
 
                 {/* User Profile / Bottom Actions */}
                 <div className="user-profile">
-                    <div className={`flex items-center gap-3 ${!sidebarOpen && 'justify-center'}`}>
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 flex items-center justify-center text-white font-bold shadow-lg">
+                    <div className="user-profile-inner">
+                        <div className="user-avatar">
                             SM
                         </div>
                         {sidebarOpen && (
-                            <div className="flex-1 min-w-0">
-                                <p className="text-sm font-semibold text-white truncate">Student User</p>
-                                <p className="text-xs text-gray-400 truncate">Pro Plan</p>
+                            <div className="user-info">
+                                <p className="user-name">Student User</p>
+                                <p className="user-plan">Free Plan</p>
                             </div>
                         )}
-                        {sidebarOpen && <Settings size={18} className="text-gray-400 cursor-pointer hover:text-white" />}
+                        {sidebarOpen && <Settings size={18} className="user-settings-icon" />}
                     </div>
                 </div>
             </aside>
@@ -175,8 +197,8 @@ const Layout = () => {
             <div className="main-wrapper">
                 {/* Floating Header */}
                 <header className="top-header">
-                    <div className="flex items-center gap-4">
-                        <button className="menu-btn p-2 hover:bg-white/5 rounded-lg transition-colors" onClick={() => setSidebarOpen(!sidebarOpen)}>
+                    <div className="header-left">
+                        <button className="menu-btn" onClick={() => setSidebarOpen(!sidebarOpen)}>
                             {sidebarOpen ? <X size={24} /> : <Menu size={24} />}
                         </button>
                         <div className="header-title">
@@ -185,12 +207,6 @@ const Layout = () => {
                     </div>
 
                     <div className="header-actions">
-                        {/* Search Bar - Visual only for now */}
-                        <div className="hidden md:flex items-center bg-white/5 border border-white/10 rounded-full px-4 py-2 mr-4">
-                            <Search size={16} className="text-gray-400 mr-2" />
-                            <input type="text" placeholder="Search..." className="bg-transparent border-none p-0 w-48 text-sm focus:ring-0 shadow-none" />
-                        </div>
-
                         <button className="icon-btn" onClick={() => importData(toast)} title="Import Data">
                             <Upload size={18} />
                         </button>
@@ -205,7 +221,7 @@ const Layout = () => {
 
                 {/* Page Content */}
                 <main className="page-content">
-                    <div className="mx-auto max-w-7xl animate-fade-in">
+                    <div className="page-content-inner">
                         <Outlet />
                     </div>
                 </main>

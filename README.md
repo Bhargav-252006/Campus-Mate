@@ -1,786 +1,477 @@
 # Campus Mate 🎓
 
-A **voice-enabled, multi-agent AI companion** for students that **REMEMBERS EVERYTHING** about you — your goals, subjects, moods, deadlines, and learning patterns.
+A voice-enabled, multi-agent AI companion for students that remembers goals, subjects, moods, deadlines, and learning patterns.
 
-Built with **React 18 + Vite** frontend and a **Node.js + Express** backend featuring a multi-LLM provider chain (Ollama → Gemini → Bytez → HuggingFace → OpenRouter), a 4-layer intent classifier, 6 specialized AI agents, 25+ built-in tools, persistent tiered memory, and an event-driven architecture.
+Built with React 18 + Vite on the frontend and a Node.js + Express microservices backend, with a multi-LLM provider chain, tiered memory, specialized agents, and event-driven services.
 
----
+It features the **Celestial Architect (Dim Mode)** UI/UX overhaul natively built into standard CSS, and robust prompt context memory routing for seamless interactions.
+
+The current production architecture is microservices-first: API Gateway + isolated Auth, Chat, Data, Analytics, Memory, and Webhooks services.
 
 ## Table of Contents
 
-1. [Features](#-features)
-2. [Architecture](#-architecture)
-3. [Project Structure](#-project-structure)
-4. [Getting Started](#-getting-started)
-5. [LLM Provider Setup](#-llm-provider-setup)
-6. [Environment Variables](#-environment-variables)
-7. [API Endpoints](#-api-endpoints)
-8. [AI Agents & Routing](#-ai-agents--routing)
-9. [Tool System](#-tool-system)
-10. [Memory System](#-memory-system)
-11. [Services Layer](#-services-layer)
-12. [Repository Layer](#-repository-layer)
-13. [Event Bus & Integrations](#-event-bus--integrations)
-14. [Feature Flags](#-feature-flags)
-15. [Frontend Modules](#-frontend-modules)
-16. [Testing](#-testing)
-17. [Tech Stack](#-tech-stack)
-18. [Future Enhancements](#-future-enhancements)
+1. [Features](#features)
+2. [Architecture](#architecture)
+3. [Project Structure](#project-structure)
+4. [Getting Started](#getting-started)
+5. [LLM Provider Setup](#llm-provider-setup)
+6. [Environment Variables](#environment-variables)
+7. [API Endpoints](#api-endpoints)
+8. [AI Agents and Routing](#ai-agents-and-routing)
+9. [Tool System](#tool-system)
+10. [Memory System](#memory-system)
+11. [Services Layer](#services-layer)
+12. [Repository Layer](#repository-layer)
+13. [Event Bus and Integrations](#event-bus-and-integrations)
+14. [Feature Flags](#feature-flags)
+15. [Frontend Modules](#frontend-modules)
+16. [Testing](#testing)
+17. [Tech Stack](#tech-stack)
+18. [Future Enhancements](#future-enhancements)
 
----
-
-## ✨ Features
+## Features
 
 ### Core AI Capabilities
-- **Multi-Agent System** — 6 specialized agents (Academic, Emotional Support, Cognitive Load, Persona Switch, Failure Pattern, Concept Gap) with centralized routing
-- **4-Layer Intent Classification** — Greeting detection → Rule-based matching → LLM classification → Confidence gating
-- **25+ Built-in Tools** — Pomodoro timer, mood logging, deadline management, notes, reminders, study plans, quizzes, and web/wiki/youtube search
-- **Persistent Tiered Memory** — Working, short-term, episodic, semantic, and profile memory that survives restarts
-- **Multi-LLM Provider Chain** — Ollama (local) → Gemini 2.5 Flash → Bytez → HuggingFace → OpenRouter with automatic fallback
+
+- Multi-agent system with 6 specialized agents: Academic, Emotional Support, Cognitive Load, Persona Switch, Failure Pattern, and Concept Gap.
+- 4-layer intent classification: greeting detection, rule-based matching, LLM classification, and confidence gating.
+- 25+ built-in tools for Pomodoro, mood tracking, deadlines, notes, reminders, study plans, quizzes, and search.
+- Persistent tiered memory: working, short-term, episodic, semantic, and profile memory.
+- Multi-LLM provider chain: Ollama, Gemini, Bytez, HuggingFace, and OpenRouter with automatic fallback.
 
 ### Student Productivity
-- **Dashboard** with class schedule, upcoming exams, and task overview
-- **Timetable Manager** — Weekly class schedule with CRUD operations
-- **Exam Tracker** — Exam dates with countdown timers
-- **Daily Schedule** — Task management with priorities
-- **Pomodoro Timer** — Focus sessions with streak tracking
-- **Deadline Manager** — Track and prioritize upcoming deadlines
-- **Notes System** — Create, tag, search, and organize notes
-- **Flashcards** — Spaced-repetition study cards
-- **Habit Tracker** — Daily habit streaks and monitoring
-- **Grade Calculator** — GPA and grade computation
-- **Resource Library** — Curated study materials
-- **Focus Mode** — Distraction-free study environment
-- **Mood Tracker** — Emotional wellness logging and trends
-- **Analytics Dashboard** — Study patterns and progress visualization
-- **System Stats** — LLM traces, provider usage, and performance metrics
 
-### Voice & UX
-- **Speech-to-Text** input (Web Speech API)
-- **Text-to-Speech** responses
-- **Dark/Light Theme** with system preference detection
-- **Keyboard Shortcuts** for power users
-- **Toast Notifications** for feedback
-- **Error Boundaries** for graceful failure handling
-- **Lazy-loaded Routes** for fast initial page load
+- Dashboard with class schedule, upcoming exams, and task overview.
+- Timetable manager for weekly class schedule CRUD.
+- Exam tracker with countdown timers.
+- Daily schedule for task management and priorities.
+- Pomodoro timer with streak tracking.
+- Deadline manager for upcoming work.
+- Notes system with tags and search.
+- Flashcards for spaced-repetition study.
+- Habit tracker for streaks and monitoring.
+- Grade calculator for GPA and grade planning.
+- Resource library for study materials.
+- Focus mode for distraction-free work.
+- Mood tracker for wellness logging and trends.
+- Analytics dashboard for study patterns and progress.
+- System stats for LLM traces, provider usage, and performance.
 
----
+### Voice and UX
 
-## 🏗️ Architecture
+- Speech-to-text input via the Web Speech API.
+- Text-to-speech responses.
+- Dark and light theme with system preference detection.
+- Keyboard shortcuts for power users.
+- Toast notifications for feedback.
+- Error boundaries for graceful failure handling.
+- Lazy-loaded routes for fast initial page load.
 
-```
+## Architecture
+
+Please review the full microservices topology, LLM orchestration flow, Docker ecosystem, and Database schema in the comprehensive [ARCHITECTURE.md](./ARCHITECTURE.md) flowcharts document.
+
+```text
 ┌───────────────────────────────────────────────────────────────────┐
 │                   FRONTEND (React 18 + Vite)                      │
-│  ┌─────────┬───────────┬───────┬──────────┬───────┬───────────┐  │
-│  │Dashboard│ Timetable │ Exams │ Schedule │ Chat  │ 12+ more  │  │
-│  └─────────┴───────────┴───────┴──────────┴───────┴───────────┘  │
-│  Context: ThemeProvider  │  ToastProvider  │  KeyboardShortcuts   │
-│  Services: api.js (Axios)│  VoiceInput (Web Speech API)          │
-└──────────────────────────┬───────────────────────────────────────┘
+│  "Celestial Architect" Dim Mode Aesthetic + Glassmorphism UI      │
+│  Context: ThemeProvider │ ToastProvider │ KeyboardShortcuts       │
+│  Services: api.js (Axios) │ VoiceInput (Web Speech API)          │
+└──────────────────────────┬────────────────────────────────────────┘
                            │ REST API (JSON)
-┌──────────────────────────┴───────────────────────────────────────┐
-│                   BACKEND (Express + Node.js)                     │
-│                                                                   │
-│  ┌─── Routes ────────────────────────────────────────────────┐   │
-│  │ chat.js │ timetable.js │ exams.js │ schedule.js │ profile │   │
-│  │ stats.js │ webhooks.js                                    │   │
-│  └────────────────────────┬──────────────────────────────────┘   │
-│                           │                                       │
-│  ┌─── Services ───────────┴──────────────────────────────────┐   │
-│  │ ConversationService  │  ToolService  │  ResponsePipeline  │   │
-│  └────────────────────────┬──────────────────────────────────┘   │
-│                           │                                       │
-│  ┌─── Agent Layer ────────┴──────────────────────────────────┐   │
-│  │              CentralizedAgent (agentRouter.js)             │   │
-│  │  ┌─────────────────────────────────────────────────────┐  │   │
-│  │  │ Classifier (4-layer) → SessionManager → PostProcessor│  │   │
-│  │  └─────────────────────────────────────────────────────┘  │   │
-│  │  ┌─────────────────────────────────────────────────────┐  │   │
-│  │  │  6 Sub-Agents:                                      │  │   │
-│  │  │  Academic │ Emotional │ Cognitive │ Persona │        │  │   │
-│  │  │  FailurePattern │ ConceptGap                        │  │   │
-│  │  └─────────────────────────────────────────────────────┘  │   │
-│  │  ┌─────────────────────────────────────────────────────┐  │   │
-│  │  │  ToolHandler → ToolCallParser → ToolService         │  │   │
-│  │  │  25+ tools: pomodoro, mood, deadlines, notes, etc.  │  │   │
-│  │  └─────────────────────────────────────────────────────┘  │   │
-│  └───────────────────────────────────────────────────────────┘   │
-│                                                                   │
-│  ┌─── Data Layer ────────────────────────────────────────────┐   │
-│  │ MemoryManagerV3 (tiered) │ Repositories (JSON-backed)     │   │
-│  │ DataStore │ LLM Service (multi-provider)                  │   │
-│  └───────────────────────────────────────────────────────────┘   │
-│                                                                   │
-│  ┌─── Infrastructure ────────────────────────────────────────┐   │
-│  │ EventBus │ n8nBridge │ Feature Flags │ Logger │ Auth(JWT) │   │
-│  └───────────────────────────────────────────────────────────┘   │
-└───────────────────────────────────────────────────────────────────┘
+┌──────────────────────────┴────────────────────────────────────────┐
+│                 API GATEWAY (Express + Node.js)                   │
+│  /auth /chat /timetable /exams /schedule /profile /stats /memory │
+└──────────────┬───────────────┬───────────────┬───────────────────┘
+     │               │               │
+   ┌──────▼──────┐ ┌──────▼──────┐ ┌─────▼────────┐
+   │ Auth Service│ │ Chat Service│ │ Data Service │
+   └──────┬──────┘ └──────┬──────┘ └─────┬────────┘
+     │               │              │
+   ┌──────▼────────┐ ┌────▼──────────┐ ┌─▼─────────────┐
+   │ Memory Service│ │Analytics Svc  │ │Webhooks Svc   │
+   └───────────────┘ └───────────────┘ └───────────────┘
 ```
 
----
+Shared infrastructure:
+- PostgreSQL for persistent artifacts (`init-db.sql`)
+- Redis for caching / transient storage
+- Docker Compose ecosystem running securely behind the AWS `api-network`
 
-## 📂 Project Structure
+Legacy monolith files still exist for compatibility, but active deployment targets containerized microservices.
 
-```
+## Project Structure
+
+```text
 campus-mate/
-├── client/                          # React Frontend
+├── client/
 │   ├── index.html
 │   ├── vite.config.js
 │   ├── package.json
 │   └── src/
-│       ├── App.jsx                  # Router with lazy-loaded routes
-│       ├── main.jsx                 # Entry point
-│       ├── index.css                # Global styles (dark/light theme)
+│       ├── App.jsx
+│       ├── main.jsx
+│       ├── index.css
 │       ├── components/
-│       │   ├── Layout.jsx           # App shell with sidebar navigation
-│       │   ├── LandingPage.jsx      # Public landing page
-│       │   ├── Dashboard.jsx        # Overview: classes, exams, tasks
-│       │   ├── Chat.jsx             # AI chat with voice input
-│       │   ├── Timetable.jsx        # Weekly class schedule CRUD
-│       │   ├── Exams.jsx            # Exam tracker with countdowns
-│       │   ├── Schedule.jsx         # Daily task management
-│       │   ├── Pomodoro.jsx         # Focus timer with streaks
-│       │   ├── MoodTracker.jsx      # Mood logging & trends
-│       │   ├── Deadlines.jsx        # Deadline management
-│       │   ├── Notes.jsx            # Note-taking with tags
-│       │   ├── Flashcards.jsx       # Study flashcards
-│       │   ├── HabitTracker.jsx     # Daily habit streaks
-│       │   ├── GradeCalculator.jsx  # GPA computation
-│       │   ├── ResourceLibrary.jsx  # Study resource links
-│       │   ├── FocusMode.jsx        # Distraction-free mode
-│       │   ├── Analytics.jsx        # Study analytics dashboard
-│       │   ├── SystemStats.jsx      # LLM traces & system metrics
-│       │   ├── VoiceInput.jsx       # Speech-to-text component
-│       │   ├── FeedbackButton.jsx   # User feedback widget
-│       │   └── ErrorBoundary.jsx    # Graceful error handling
 │       ├── context/
-│       │   ├── ThemeContext.jsx      # Dark/light theme toggle
-│       │   ├── ToastContext.jsx      # Toast notification system
-│       │   └── KeyboardShortcuts.jsx # Global keyboard shortcut handler
 │       └── services/
-│           └── api.js               # Axios HTTP client for backend
+│           └── api.js
 │
-└── server/                          # Express Backend
+├── docker/
+│   ├── Dockerfile.gateway
+│   ├── Dockerfile.auth
+│   ├── Dockerfile.chat
+│   ├── Dockerfile.data
+│   ├── Dockerfile.analytics
+│   ├── Dockerfile.memory
+│   ├── Dockerfile.webhooks
+│   └── Dockerfile.client
+├── docker-compose.yml
+└── server/
     ├── package.json
-    ├── nodemon.json
-    ├── data/                        # JSON file storage (auto-created)
-    │   ├── memory-v3.json           # Tiered memory (working/short/episodic/semantic/profile)
-    │   ├── profiles-v3.json         # Student profiles
-    │   ├── chat-history.json        # Conversation history per user
-    │   ├── schedule.json            # Daily tasks
-    │   ├── timetable.json           # Class schedule
-    │   ├── moods.json               # Mood entries
-    │   ├── pomodoro.json            # Focus session data
-    │   └── preferences.json         # User preferences
-    ├── logs/                        # Server logs (auto-created)
+    ├── data/
+    ├── logs/
     └── src/
-        ├── app.js                   # Express server entry point
-        │
+    ├── app.js                     # legacy monolith entry
         ├── config/
-        │   └── features.js          # Feature flags (12 toggles from env vars)
-        │
-        ├── agents/                  # AI Agent System
-        │   ├── agentRouter.js       # CentralizedAgent orchestrator
-        │   ├── classifier.js        # 4-layer intent classification
-        │   ├── sessionManager.js    # Conversation session continuity
-        │   ├── postProcessor.js     # Response quality pipeline (eval, confidence, stall, progress)
-        │   ├── toolHandler.js       # Direct tool-trigger detection from user messages
-        │   ├── toolCallParser.js    # Parses [TOOL_CALL: name(args)] syntax from LLM output
-        │   ├── studentMatePersona.js # Default persona & system prompts
-        │   ├── academicAgent.js     # Academic concept explanations
-        │   ├── emotionalSupportAgent.js  # Empathetic support & coping strategies
-        │   ├── cognitiveLoadAgent.js     # Task prioritization & overwhelm management
-        │   ├── personaSwitchAgent.js     # Communication style adaptation
-        │   ├── failurePatternAgent.js    # Learning pattern analysis
-        │   └── conceptGapAgent.js        # Knowledge gap identification
-        │
+        ├── agents/
         ├── core/
-        │   └── eventBus.js          # Singleton EventEmitter for cross-cutting events
-        │
         ├── services/
-        │   ├── conversationService.js  # Orchestrates chat: route → persist → emit → trace
-        │   ├── toolService.js          # Unified tool execution with events + tracing
-        │   └── responsePipeline.js     # Response normalization & citation injection
-        │
-        ├── repositories/            # JSON-backed data access layer
-        │   ├── BaseRepository.js    # Generic CRUD with debounced saves
-        │   ├── notesRepository.js   # Notes with search & tag filtering
-        │   ├── moodRepository.js    # Moods with date range queries
-        │   ├── deadlineRepository.js # Deadlines with active/upcoming/overdue
-        │   ├── pomodoroRepository.js # Pomodoro sessions & streaks
-        │   ├── reminderRepository.js # Reminders with date filtering
-        │   ├── quizRepository.js    # Quizzes by topic & recency
-        │   ├── studyPlanRepository.js # Study plans with today's tasks
-        │   ├── statsRepository.js   # LLM traces & progress snapshots
-        │   └── index.js             # Re-exports all repositories
-        │
-        ├── tools/                   # Tool implementations
-        │   ├── registry.js          # Tool map, execute(), getToolsPrompt()
-        │   ├── base.js              # Shared helpers: loadJSON, saveJSON, generateId
-        │   ├── pomodoro.js          # start/stop/status/stats (6 tools)
-        │   ├── mood.js              # logMood, getMoodHistory, getMoodStats
-        │   ├── deadlines.js         # add/list/complete/delete/upcoming deadlines
-        │   ├── notes.js             # add/list/search/delete notes
-        │   ├── reminders.js         # add/list/complete/delete reminders
-        │   ├── studyPlans.js        # create/list/update/complete study plans
-        │   ├── quiz.js              # generate/submit/review quizzes
-        │   └── search.js            # searchWeb, searchWikipedia, searchYoutube
-        │
-        ├── routes/                  # Express route modules
-        │   ├── api.js               # Root router: mounts all sub-routers
-        │   ├── chat.js              # POST /api/chat, GET/DELETE /api/chat/history
-        │   ├── timetable.js         # CRUD for class schedule
-        │   ├── exams.js             # CRUD for exams
-        │   ├── schedule.js          # CRUD for daily tasks
-        │   ├── profile.js           # GET/PUT user profile, memory export
-        │   ├── stats.js             # GET traces, GET progress, POST reset
-        │   └── webhooks.js          # POST /api/webhooks/n8n (inbound tool execution)
-        │
+    ├── services-isolated/
+    │   ├── auth-service/
+    │   ├── chat-service/
+    │   ├── data-service/
+    │   ├── analytics-service/
+    │   ├── memory-service/
+    │   └── webhooks-service/
+    ├── gateway/
+    ├── shared/
+        ├── repositories/
+        ├── tools/
+        ├── routes/
         ├── integrations/
-        │   └── n8nBridge.js         # Outbound webhooks to n8n on key events
-        │
         └── utils/
-            ├── llmService.js        # Multi-provider LLM client with trace logging
-            ├── memoryManagerV3.js    # Tiered memory: working/short/episodic/semantic/profile
-            ├── memoryExtractor.js    # Extracts facts from conversations into memory
-            ├── promptAssembler.js    # Builds system prompts with context injection
-            ├── dataStore.js         # Low-level JSON file read/write
-            ├── logger.js            # Structured logging with levels & file output
-            ├── auth.js              # JWT-based device authentication middleware
-            ├── inputSanitizer.js    # XSS/injection protection middleware
-            ├── selfEvaluator.js     # LLM self-evaluation of response quality
-            ├── confidenceScorer.js  # Response confidence scoring
-            ├── stallDetector.js     # Detects repetitive/stalled conversations
-            ├── progressLedger.js    # Tracks user progress over time
-            └── toolExecutor.js      # Legacy shim (re-exports tools/registry)
 ```
 
----
-
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
-- **Node.js 18+**
-- **npm** or **yarn**
-- At least one LLM provider configured (see below)
 
-### 1. Clone & Install
+- Node.js 18+
+- npm or yarn
+- At least one LLM provider configured
+
+### 1. Clone and install
 
 ```bash
 git clone <repo-url> campus-mate
 cd campus-mate
 
-# Install backend dependencies
 cd server
 npm install
 
-# Install frontend dependencies
 cd ../client
 npm install
 ```
 
-### 2. Configure Environment
+### 2. Configure environment
 
 ```bash
 cd server
-cp .env.example .env    # Create from template (if available)
+cp .env.example .env
 ```
 
-Edit `server/.env` with at least one LLM provider key (see [LLM Provider Setup](#-llm-provider-setup)).
+Edit `server/.env` with at least one LLM provider key.
 
-### 3. Run (Development)
+### 3. Run in development
+
+Recommended (microservices):
 
 ```bash
-# Terminal 1 — Backend
-cd server
-npm run dev              # Starts with nodemon on port 5000
+npm run start:microservices
+```
 
-# Terminal 2 — Frontend
+This launches the API gateway, isolated backend services, frontend container, and Prometheus with Docker Compose.
+
+Legacy mode (single backend + Vite frontend):
+
+```bash
+# Backend (legacy monolith)
+cd server
+npm run dev
+
+# Frontend
 cd client
-npm run dev              # Starts Vite dev server on port 5173
+npm run dev
 ```
 
-Or use the VS Code task **"Campus Mate: Start All"** to launch both in parallel.
+You can also use the VS Code task `Campus Mate: Start All` for the legacy dual-process mode.
 
-### 4. Open
+### 4. Open the app
 
-Navigate to **http://localhost:5173** in your browser.
+Open http://localhost:5173 in your browser.
 
----
+For microservices Docker mode, frontend is served on http://localhost and API gateway health is at http://localhost:3000/health.
 
-## 🔑 LLM Provider Setup
+## LLM Provider Setup
 
-Campus Mate uses a **multi-provider fallback chain**. Configure one or more:
+Campus Mate uses a multi-provider fallback chain. Configure one or more:
 
 | Priority | Provider | Model | Setup |
-|----------|----------|-------|-------|
-| 1 (fastest) | **Ollama** (local) | `qwen3:8b` | [Install Ollama](https://ollama.ai), run `ollama pull qwen3:8b` |
-| 2 | **Google Gemini** | `gemini-2.5-flash` | Get key at [aistudio.google.com](https://aistudio.google.com) |
-| 3 | **Bytez** | `Meta-Llama-3.1-8B-Instruct` | Get key at [bytez.com](https://bytez.com) |
-| 4 | **HuggingFace** | `Llama-3.1-8B-Instruct` | Get token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) |
-| 5 (fallback) | **OpenRouter** | `llama-3.1-8b-instruct:free` | Get key at [openrouter.ai/keys](https://openrouter.ai/keys) — **free, no credit card** |
+|---|---|---|---|
+| 1 | Ollama | `qwen3:8b` | Install Ollama and pull the model locally |
+| 2 | Google Gemini | `gemini-2.5-flash` | Create an API key in Google AI Studio |
+| 3 | Bytez | `Meta-Llama-3.1-8B-Instruct` | Configure the Bytez API key |
+| 4 | HuggingFace | `Llama-3.1-8B-Instruct` | Configure a HuggingFace token |
+| 5 | OpenRouter | `llama-3.1-8b-instruct:free` | Configure the OpenRouter API key |
 
 The system tries each provider in order and falls back to the next on failure.
 
----
-
-## 📋 Environment Variables
+## Environment Variables
 
 ```env
-# ── Server ────────────────────────────────────────
+# Server
 PORT=5000
 NODE_ENV=development
 JWT_SECRET=your_jwt_secret
 
-# ── LLM Providers (configure at least one) ───────
-LLM_PROVIDER=ollama                        # Primary provider: ollama | gemini | bytez | huggingface | openrouter
-OLLAMA_MODEL=qwen3:8b                      # Local Ollama model
+# LLM Providers
+LLM_PROVIDER=ollama
+OLLAMA_MODEL=qwen3:8b
 GEMINI_API_KEY=your_gemini_key
 GEMINI_MODEL=gemini-2.5-flash
-GEMINI_ROUTING_MODEL=gemini-2.5-flash-lite # Lighter model for classification/routing tasks
+GEMINI_ROUTING_MODEL=gemini-2.5-flash-lite
 BYTEZ_API_KEY=your_bytez_key
 HF_API_TOKEN=your_huggingface_token
 OPENROUTER_API_KEY=your_openrouter_key
 
-# ── Feature Flags (all default to true unless noted) ──
-ENABLE_SELF_EVAL=true                      # LLM self-evaluation of responses
-ENABLE_CONFIDENCE_SCORING=true             # Response confidence scoring
-ENABLE_STALL_DETECTION=true                # Detect repetitive conversations
-ENABLE_PROGRESS_LEDGER=true                # Track user progress
-ENABLE_REPAIR_LOOP=false                   # Experimental: auto-repair bad responses (default: off)
-ENABLE_HYBRID_RETRIEVAL=false              # Experimental: hybrid memory retrieval (default: off)
-ENABLE_EVENT_BUS=true                      # Cross-cutting event emission
-ENABLE_N8N_BRIDGE=false                    # n8n webhook integration (default: off)
-ENABLE_LLM_TRACING=true                   # Log LLM provider/model/latency per call
+# Feature Flags
+ENABLE_SELF_EVAL=true
+ENABLE_CONFIDENCE_SCORING=true
+ENABLE_STALL_DETECTION=true
+ENABLE_PROGRESS_LEDGER=true
+ENABLE_REPAIR_LOOP=false
+ENABLE_HYBRID_RETRIEVAL=false
+ENABLE_EVENT_BUS=true
+ENABLE_N8N_BRIDGE=false
+ENABLE_LLM_TRACING=true
 
-# ── Response Pipeline ─────────────────────────────
-STRIP_THINK_TAGS=true                      # Remove <think> tags from LLM output
-MAX_RESPONSE_LENGTH=4000                   # Truncate responses beyond this length
-INJECT_CITATIONS=false                     # Map [source:ID] tokens to links (default: off)
+# Response Pipeline
+STRIP_THINK_TAGS=true
+MAX_RESPONSE_LENGTH=4000
+INJECT_CITATIONS=false
 
-# ── Integrations ──────────────────────────────────
-N8N_WEBHOOK_URL=                           # n8n webhook URL for outbound events
-ALLOWED_ORIGINS=http://localhost:5173      # Comma-separated CORS origins
+# Integrations
+N8N_WEBHOOK_URL=
+ALLOWED_ORIGINS=http://localhost:5173
 ```
 
----
-
-## 🔌 API Endpoints
+## API Endpoints
 
 ### Chat
+
 | Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/chat` | Send a message → returns AI response with agent info, confidence, tools used |
-| `GET` | `/api/chat/history` | Get conversation history for a user |
-| `DELETE` | `/api/chat/history` | Clear conversation history |
-
-**Chat Request:**
-```json
-{
-  "message": "start a 25 minute pomodoro for math",
-  "userId": "user123"
-}
-```
-
-**Chat Response:**
-```json
-{
-  "response": "Started a 25-minute Pomodoro session for Math! 🍅",
-  "agentUsed": "tool_handler",
-  "timestamp": "2026-03-07T12:00:00.000Z",
-  "confidence": 0.95,
-  "confidenceLevel": "high",
-  "toolsUsed": ["startPomodoro"]
-}
-```
+|---|---|---|
+| POST | `/api/chat` | Send a message and receive an AI response |
+| GET | `/api/chat/history` | Get conversation history |
+| DELETE | `/api/chat/history` | Clear conversation history |
 
 ### Timetable
+
 | Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/timetable` | Get all timetable entries |
-| `POST` | `/api/timetable` | Add a class entry |
-| `PUT` | `/api/timetable/:id` | Update a class entry |
-| `DELETE` | `/api/timetable/:id` | Delete a class entry |
+|---|---|---|
+| GET | `/api/timetable` | List class entries |
+| POST | `/api/timetable` | Add a class entry |
+| PUT | `/api/timetable/:id` | Update a class entry |
+| DELETE | `/api/timetable/:id` | Delete a class entry |
 
 ### Exams
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/exams` | Get all exams |
-| `POST` | `/api/exams` | Add an exam |
-| `PUT` | `/api/exams/:id` | Update an exam |
-| `DELETE` | `/api/exams/:id` | Delete an exam |
 
-### Schedule (Daily Tasks)
 | Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/schedule` | Get all tasks |
-| `POST` | `/api/schedule` | Add a task |
-| `PUT` | `/api/schedule/:id` | Update a task |
-| `DELETE` | `/api/schedule/:id` | Delete a task |
+|---|---|---|
+| GET | `/api/exams` | List exams |
+| POST | `/api/exams` | Add an exam |
+| PUT | `/api/exams/:id` | Update an exam |
+| DELETE | `/api/exams/:id` | Delete an exam |
 
-### Profile & Memory
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/profile/:userId` | Get user profile |
-| `PUT` | `/api/profile/:userId` | Update user profile |
-| `GET` | `/api/memory/export` | Export full memory state |
+### Schedule
 
-### Stats & Tracing
 | Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/stats/traces` | Get LLM call traces (provider, model, latency) |
-| `GET` | `/api/stats/progress/:userId` | Get user progress snapshot |
-| `POST` | `/api/stats/reset` | Reset stats for a user |
+|---|---|---|
+| GET | `/api/schedule` | List daily tasks |
+| POST | `/api/schedule` | Add a task |
+| PUT | `/api/schedule/:id` | Update a task |
+| DELETE | `/api/schedule/:id` | Delete a task |
+
+### Profile and Memory
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/profile/:userId` | Get user profile |
+| PUT | `/api/profile/:userId` | Update user profile |
+| GET | `/api/memory/export` | Export memory state |
+
+### Stats and Tracing
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/stats/traces` | Get LLM trace data |
+| GET | `/api/stats/progress/:userId` | Get user progress snapshot |
+| POST | `/api/stats/reset` | Reset stats |
 
 ### Webhooks
+
 | Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/webhooks/n8n` | Inbound webhook for external tool execution |
+|---|---|---|
+| POST | `/api/webhooks/n8n` | Inbound webhook for external tool execution |
 
-### Health
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/` | Server status, version, and listed endpoints |
+## AI Agents and Routing
 
----
+### Routing pipeline
 
-## 🤖 AI Agents & Routing
-
-### The Routing Pipeline
-
-```
+```text
 User Message
-    │
-    ▼
-┌─────────────────┐
-│   Classifier     │  4-layer intent detection
-│  (classifier.js) │
-│                  │
-│  1. Greeting?    │──→ Quick greeting response
-│  2. Rule-based   │──→ Keyword/pattern matching
-│  3. LLM classify │──→ Gemini/Ollama classifies intent
-│  4. Confidence   │──→ Falls back to academic if unsure
-└────────┬────────┘
-         │ {intent, confidence, reasoning}
-         ▼
-┌─────────────────┐
-│  SessionManager  │  Maintains conversation continuity
-│                  │  Tracks active agent per session
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  ToolHandler     │  Checks for direct tool triggers
-│                  │  ("start pomodoro", "add deadline", etc.)
-│                  │  If matched → executes via ToolService
-└────────┬────────┘
-         │ (if no tool match)
-         ▼
-┌─────────────────┐
-│  AgentRouter     │  Routes to the right sub-agent
-│ (CentralizedAgent)│  Injects memory + prompt context
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  Sub-Agent       │  One of 6 specialists generates response
-│                  │  via LLM with agent-specific system prompt
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  PostProcessor   │  Quality pipeline:
-│                  │  1. Response normalization (strip <think>, truncate)
-│                  │  2. Self-evaluation (LLM grades its own response)
-│                  │  3. Confidence scoring
-│                  │  4. Stall detection
-│                  │  5. Progress ledger update
-│                  │  6. Tool call parsing & execution
-└────────┬────────┘
-         │
-         ▼
-    Final Response
+  → Classifier (4-layer intent detection)
+  → SessionManager (continuity)
+  → ToolHandler (direct tool triggers)
+  → AgentRouter (specialist selection)
+  → Sub-Agent response generation
+  → PostProcessor (normalize, score, detect stalls, parse tools)
+  → Final Response
 ```
 
-### Agent Details
+### Agent details
 
-| Agent | Triggers | What It Does |
-|-------|----------|-------------|
-| **Academic** | "explain", "what is", study questions | Explains concepts, helps with coursework, generates study material |
-| **Emotional Support** | "stressed", "anxious", "feeling down" | Empathetic listening, coping strategies, motivation |
-| **Cognitive Load** | "overwhelmed", "too many tasks", "can't focus" | Task prioritization, workload management, break suggestions |
-| **Persona Switch** | "talk like a friend", "be my mentor" | Adapts tone: Friend (casual), Teacher (structured), Mentor (guiding) |
-| **Failure Pattern** | "keep failing", "always get wrong" | Analyzes patterns, identifies root causes, suggests strategies |
-| **Concept Gap** | "don't understand", "confused about" | Identifies prerequisite gaps, builds understanding step-by-step |
+| Agent | Triggers | What it does |
+|---|---|---|
+| Academic | explain, what is, study questions | Coursework help and concept explanation |
+| Emotional Support | stressed, anxious, feeling down | Empathetic listening and coping strategies |
+| Cognitive Load | overwhelmed, too many tasks, can't focus | Prioritization and workload management |
+| Persona Switch | talk like a friend, be my mentor | Tone adaptation |
+| Failure Pattern | keep failing, always get wrong | Pattern analysis and improvement strategies |
+| Concept Gap | don't understand, confused about | Prerequisite gap analysis |
 
----
+## Tool System
 
-## 🔧 Tool System
+| Tool | Functions | Trigger examples |
+|---|---|---|
+| Pomodoro | start/stop/status/stats | start a 25 minute pomodoro |
+| Mood | log/history/stats | I'm feeling happy today |
+| Deadlines | add/list/complete/delete/upcoming | add deadline for math assignment |
+| Notes | add/list/search/delete | save a note about photosynthesis |
+| Reminders | add/list/complete/delete | remind me to submit the report |
+| Study Plans | create/list/update/complete | create a study plan for physics |
+| Quiz | generate/submit/review | quiz me on data structures |
+| Search | web/wikipedia/youtube | search YouTube for calculus tutorials |
 
-The AI can autonomously invoke tools during conversations. Users can also trigger tools directly via natural language.
+## Memory System 🧠
 
-### Available Tools
+Campus Mate utilizes a tiered Memory System to power AI interactions seamlessly without running out of context limits.
 
-| Tool | Functions | Trigger Examples |
-|------|-----------|-----------------|
-| **Pomodoro** | `startPomodoro`, `stopPomodoro`, `getPomodoroStatus`, `getPomodoroStats`, `skipBreak`, `completeCycle` | "start a 25 min pomodoro for math" |
-| **Mood** | `logMood`, `getMoodHistory`, `getMoodStats` | "I'm feeling happy today" |
-| **Deadlines** | `addDeadline`, `listDeadlines`, `completeDeadline`, `deleteDeadline`, `getUpcomingDeadlines` | "add deadline: math assignment due Friday" |
-| **Notes** | `addNote`, `listNotes`, `searchNotes`, `deleteNote` | "save a note about photosynthesis" |
-| **Reminders** | `addReminder`, `listReminders`, `completeReminder`, `deleteReminder` | "remind me to submit the report" |
-| **Study Plans** | `createStudyPlan`, `listStudyPlans`, `updateStudyPlan`, `completeStudyPlan` | "create a study plan for physics" |
-| **Quiz** | `generateQuiz`, `submitQuiz`, `reviewQuiz` | "quiz me on data structures" |
-| **Search** | `searchWeb`, `searchWikipedia`, `searchYoutube` | "search YouTube for linear algebra tutorials" |
+| Tier | Purpose | Retention | Mechanism |
+|---|---|---|---|
+| Working | Current context | Session-scoped | Active API Buffer Arrays |
+| Short-term | Recent interactions | Hours to days | `chat_messages` Postgres storage |
+| Episodic | Conversation episodes | Weeks | LLM semantic snapshots |
+| Semantic | Extracted facts | Permanent | Redis / Data Layer mappings |
+| Profile | Preferences and style | Permanent | Authentication hooks |
 
-### Tool Execution Flow
+**Memory Amnesia Patched**: LLM endpoints specifically process memory cleanly using native role mappings (`role: 'system'` vs `'model'` vs `'user'`) instead of monolithic string duplication, preventing prompt injection overlap and ensuring references (like "what is it") are instantly understood.
 
-```
-User Message or LLM Output
-    │
-    ├──→ ToolHandler (pattern matching on user text)
-    │        │
-    │        ▼
-    │    ToolService.executeTool({name, args, userId})
-    │        │
-    │        ├──→ tools/registry.js → execute tool function
-    │        ├──→ EventBus.emit (e.g., "deadline.created")
-    │        └──→ StatsRepository.addTrace (timing data)
-    │
-    └──→ ToolCallParser (parses [TOOL_CALL: name(args)] from LLM text)
-             │
-             ▼
-         ToolService.executeTool(...)
-```
+## Services Layer
 
----
+- ConversationService orchestrates chat requests and response envelopes.
+- ToolService executes tools and emits events.
+- ResponsePipeline normalizes output, strips `<think>` tags, and prepares final responses.
 
-## 🧠 Memory System
+## Repository Layer
 
-Campus Mate uses **MemoryManagerV3** — a 5-tier persistent memory architecture:
+JSON-backed repositories provide a consistent data access pattern with debounced saves and helper methods for domain-specific queries.
 
-| Tier | Purpose | Retention |
-|------|---------|-----------|
-| **Working Memory** | Current conversation context | Session-scoped |
-| **Short-Term Memory** | Recent interactions summary | Hours to days |
-| **Episodic Memory** | Specific conversation episodes | Weeks |
-| **Semantic Memory** | Extracted facts (name, subjects, goals) | Permanent |
-| **Profile Memory** | User preferences, learning style | Permanent |
+## Event Bus and Integrations
 
-### Memory Features
-- **Auto-extraction** — `memoryExtractor.js` pulls facts from conversations into semantic/profile memory
-- **Context injection** — `promptAssembler.js` injects relevant memory into every LLM prompt
-- **Debounced persistence** — Changes are batched and saved to `data/memory-v3.json` to minimize disk I/O
-- **Graceful shutdown** — Memory is force-flushed on `SIGTERM`/`SIGINT`
+- EventBus is a singleton EventEmitter for cross-cutting events.
+- n8nBridge connects Campus Mate to n8n or any webhook-compatible automation platform.
 
-### How Memory Enriches Responses
-
-```
-User: "Help me study"
-    │
-    ▼
-PromptAssembler builds prompt with:
-  - User's name (semantic memory)
-  - Subjects they're studying (profile memory)
-  - Recent conversation context (working memory)
-  - Past study patterns (episodic memory)
-    │
-    ▼
-LLM receives a personalized, context-rich prompt
-```
-
----
-
-## 🔄 Services Layer
-
-### ConversationService (`services/conversationService.js`)
-The single entry point for all chat interactions:
-1. Delegates to `agentRouter.processRequest()` for AI processing
-2. Persists messages to `chat-history.json`
-3. Emits `chat.messageHandled` event via EventBus
-4. Logs LLM trace data (provider, latency)
-5. Returns a normalized response envelope
-
-### ToolService (`services/toolService.js`)
-Unified tool execution with cross-cutting concerns:
-- Wraps `tools/registry.js` execute calls
-- Emits domain events (e.g., `deadline.created`, `mood.recorded`, `pomodoro.started`)
-- Records execution timing in `statsRepository`
-- Single interface: `executeTool({name, args, userId})`
-
-### ResponsePipeline (`services/responsePipeline.js`)
-Post-LLM response processing:
-- `normalizeResponse(text)` — strips `<think>` tags, enforces `MAX_RESPONSE_LENGTH` with sentence-boundary truncation, collapses whitespace
-- `injectCitations(text, sourceMap)` — maps `[source:ID]` tokens to markdown links (future feature)
-
----
-
-## 🗄️ Repository Layer
-
-JSON-backed data access with the **Repository Pattern**:
-
-### BaseRepository
-- Generic CRUD: `getByUserId()`, `getById()`, `add()`, `update()`, `remove()`, `clear()`
-- **Debounced saves** — writes are batched (1-second debounce) to prevent disk thrashing
-- `listRecentlyUpdated()` — query records modified within a time window
-- `forceSave()` — immediate flush for shutdown scenarios
-
-### Domain Repositories
-
-| Repository | File | Extra Methods |
-|-----------|------|---------------|
-| `NotesRepo` | `notesRepository.js` | `search(userId, query)`, `getByTag(userId, tag)` |
-| `MoodRepo` | `moodRepository.js` | `getRecent(userId, n)`, `getByDateRange(userId, from, to)` |
-| `DeadlineRepo` | `deadlineRepository.js` | `getActive(userId)`, `getUpcoming(userId, days)`, `getOverdue(userId)`, `markComplete(userId, id)` |
-| `PomodoroRepo` | `pomodoroRepository.js` | Custom shape: `{sessions, currentSession, totalFocusTime, streak}` |
-| `ReminderRepo` | `reminderRepository.js` | `getActive(userId)`, `getForDate(userId, date)` |
-| `QuizRepo` | `quizRepository.js` | `getByTopic(userId, topic)`, `getRecent(userId, n)` |
-| `StudyPlanRepo` | `studyPlanRepository.js` | `getActive(userId)`, `getBySubject(userId, subject)`, `getTodaysTasks(userId)` |
-| `StatsRepo` | `statsRepository.js` | `addTrace(trace)`, `getTraces(filter)`, `saveSnapshot(userId, data)` |
-
----
-
-## 📡 Event Bus & Integrations
-
-### EventBus (`core/eventBus.js`)
-A singleton Node.js `EventEmitter` for decoupled, cross-cutting event communication:
-- Guarded by `ENABLE_EVENT_BUS` feature flag
-- Events: `deadline.created`, `deadline.completed`, `mood.recorded`, `pomodoro.started`, `pomodoro.completed`, `note.created`, `chat.messageHandled`
-
-### n8n Bridge (`integrations/n8nBridge.js`)
-Connects Campus Mate to **n8n** (or any webhook-compatible automation platform):
-- **Outbound**: Listens to EventBus events and POSTs to `N8N_WEBHOOK_URL`
-- **Inbound**: `POST /api/webhooks/n8n` accepts `{type, tool, args, userId}` to execute tools externally
-- Disabled by default — enable with `ENABLE_N8N_BRIDGE=true` and set `N8N_WEBHOOK_URL`
-
----
-
-## ⚙️ Feature Flags
-
-All flags are controlled via environment variables in `server/src/config/features.js`:
+## Feature Flags
 
 | Flag | Default | Purpose |
-|------|---------|---------|
-| `ENABLE_SELF_EVAL` | `true` | LLM self-evaluates response quality |
-| `ENABLE_CONFIDENCE_SCORING` | `true` | Score confidence of each response |
-| `ENABLE_STALL_DETECTION` | `true` | Detect & break out of repetitive loops |
-| `ENABLE_PROGRESS_LEDGER` | `true` | Track learning progress over time |
-| `ENABLE_REPAIR_LOOP` | `false` | Auto-repair low-quality responses |
-| `ENABLE_HYBRID_RETRIEVAL` | `false` | Hybrid memory search (experimental) |
-| `ENABLE_EVENT_BUS` | `true` | Enable cross-cutting event emission |
-| `ENABLE_N8N_BRIDGE` | `false` | Enable n8n webhook integration |
-| `ENABLE_LLM_TRACING` | `true` | Log provider/model/latency per LLM call |
-| `STRIP_THINK_TAGS` | `true` | Remove `<think>` tags from responses |
-| `MAX_RESPONSE_LENGTH` | `4000` | Max characters in a response |
-| `INJECT_CITATIONS` | `false` | Map `[source:ID]` to links |
+|---|---|---|
+| ENABLE_SELF_EVAL | true | LLM self-evaluation |
+| ENABLE_CONFIDENCE_SCORING | true | Confidence scoring |
+| ENABLE_STALL_DETECTION | true | Detect repetitive loops |
+| ENABLE_PROGRESS_LEDGER | true | Track learning progress |
+| ENABLE_REPAIR_LOOP | false | Experimental auto-repair |
+| ENABLE_HYBRID_RETRIEVAL | false | Experimental hybrid retrieval |
+| ENABLE_EVENT_BUS | true | Emit domain events |
+| ENABLE_N8N_BRIDGE | false | Enable n8n integration |
+| ENABLE_LLM_TRACING | true | Log provider/model/latency |
+| STRIP_THINK_TAGS | true | Remove reasoning tags |
+| MAX_RESPONSE_LENGTH | 4000 | Max response length |
+| INJECT_CITATIONS | false | Citation mapping |
 
----
-
-## 📱 Frontend Modules
-
-All frontend routes are **lazy-loaded** for optimal performance:
+## Frontend Modules
 
 | Route | Component | Description |
-|-------|-----------|-------------|
-| `/` | `LandingPage` | Public landing with feature highlights |
-| `/app` | `Dashboard` | Overview of classes, tasks, exams |
-| `/app/timetable` | `Timetable` | Weekly class schedule CRUD |
-| `/app/exams` | `Exams` | Exam tracker with countdown |
-| `/app/schedule` | `Schedule` | Daily task management with priorities |
-| `/app/chat` | `Chat` | AI chat with voice input & agent info |
-| `/app/pomodoro` | `Pomodoro` | Focus timer with session history |
-| `/app/mood` | `MoodTracker` | Mood logging & trend visualization |
-| `/app/deadlines` | `Deadlines` | Deadline management |
-| `/app/notes` | `Notes` | Note-taking with tags & search |
-| `/app/flashcards` | `Flashcards` | Study flashcards |
-| `/app/habits` | `HabitTracker` | Daily habit streaks |
-| `/app/grades` | `GradeCalculator` | GPA & grade computation |
-| `/app/resources` | `ResourceLibrary` | Curated study materials |
-| `/app/focus` | `FocusMode` | Distraction-free study mode |
-| `/app/analytics` | `Analytics` | Study analytics & charts |
-| `/app/stats` | `SystemStats` | LLM traces & system metrics |
+|---|---|---|
+| / | LandingPage | Public landing page |
+| /app | Dashboard | Overview of classes, tasks, exams |
+| /app/timetable | Timetable | Class schedule CRUD |
+| /app/exams | Exams | Exam tracking |
+| /app/schedule | Schedule | Daily tasks |
+| /app/chat | Chat | AI chat with voice input |
+| /app/pomodoro | Pomodoro | Focus timer |
+| /app/mood | MoodTracker | Mood logging and trends |
+| /app/deadlines | Deadlines | Deadline management |
+| /app/notes | Notes | Note-taking with tags and search |
+| /app/flashcards | Flashcards | Study cards |
+| /app/habits | HabitTracker | Daily habits |
+| /app/grades | GradeCalculator | GPA computation |
+| /app/resources | ResourceLibrary | Study materials |
+| /app/focus | FocusMode | Distraction-free study mode |
+| /app/analytics | Analytics | Study analytics |
+| /app/stats | SystemStats | LLM traces and metrics |
 
----
+## Testing
 
-## 🧪 Testing
-
-### Smoke Test (Manual)
+### Smoke test
 
 ```bash
 cd server
 node -e "require('./src/agents/agentRouter'); console.log('All modules loaded OK')"
 ```
 
-### Test the AI Chat
-
-| Say This | Expected Agent |
-|----------|---------------|
-| "I'm feeling stressed about exams" | Emotional Support |
-| "Explain what is machine learning" | Academic |
-| "I have too many deadlines" | Cognitive Load |
-| "Talk to me like a friend" | Persona Switch |
-| "I keep failing at math" | Failure Pattern |
-| "I don't understand recursion" | Concept Gap |
-
-### Test Tool Triggers
-
-| Say This | Expected Tool |
-|----------|--------------|
-| "Start a 25 minute pomodoro for math" | `startPomodoro` |
-| "I'm feeling happy today" | `logMood` |
-| "Add deadline: report due March 15" | `addDeadline` |
-| "Save a note about photosynthesis" | `addNote` |
-| "Quiz me on data structures" | `generateQuiz` |
-| "Search YouTube for calculus tutorials" | `searchYoutube` |
-
-### API Test (curl)
+### API test
 
 ```bash
-# Chat
 curl -X POST http://localhost:5000/api/chat \
   -H "Content-Type: application/json" \
   -d '{"message":"start a 25 minute pomodoro for math","userId":"test"}'
-
-# Stats traces
-curl http://localhost:5000/api/stats/traces
-
-# Health
-curl http://localhost:5000/
 ```
 
----
-
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Layer | Technology |
-|-------|------------|
-| **Frontend** | React 18, Vite 7, React Router 7, Axios, Lucide Icons, React Markdown |
-| **Backend** | Node.js, Express 4, JWT (jsonwebtoken), express-rate-limit |
-| **AI/LLM** | Ollama (local), Google Gemini, Bytez, HuggingFace Inference, OpenRouter |
-| **Storage** | JSON files with debounced writes (upgradeable to MongoDB) |
-| **Voice** | Web Speech API (browser-native) |
-| **Testing** | Jest 30, Supertest 7 |
-| **Dev Tools** | Nodemon, Vite HMR |
+|---|---|
+| Frontend | React 18, Vite 7, React Router 7, Axios, Lucide Icons, React Markdown |
+| Backend | Node.js, Express 4, JWT, express-rate-limit |
+| AI/LLM | Ollama, Google Gemini, Bytez, HuggingFace, OpenRouter |
+| Storage | JSON files with debounced writes |
+| Voice | Web Speech API |
+| Testing | Jest, Supertest |
+| Dev tools | Nodemon, Vite HMR |
 
----
+## Future Enhancements
 
-## 🎯 Future Enhancements
+- Database migration for repositories.
+- Spaced repetition for flashcards.
+- Google Calendar and iCal export.
+- Mobile app.
+- WebSocket chat streaming.
+- Plugin system for community tools.
+- Multi-language support.
+- Collaborative study rooms.
 
-- [ ] MongoDB/PostgreSQL migration for repositories
-- [ ] Placement preparation agent
-- [ ] Spaced repetition algorithm for flashcards
-- [ ] Calendar app export (Google Calendar, iCal)
-- [ ] Mobile app (React Native)
-- [ ] WebSocket for real-time chat streaming
-- [ ] Plugin system for community tools
-- [ ] Multi-language support
-- [ ] Collaborative study rooms
+## License
 
----
-
-## 📄 License
-
-MIT License — feel free to use for your projects!
-
----
-
-Built with ❤️ for students
+MIT License.

@@ -1,5 +1,4 @@
-const {callLLM} = require('../utils/llmService');
-const {getStudentMatePersona, getAdaptiveTone, getContinuityPrompt} = require('./studentMatePersona');
+const {BaseAgent} = require('./BaseAgent');
 
 /**
  * COGNITIVE LOAD AGENT - Specialized for Workload & Focus Management
@@ -9,7 +8,7 @@ const {getStudentMatePersona, getAdaptiveTone, getContinuityPrompt} = require('.
 const AGENT_CONFIG = {
     name: 'Cognitive Load Agent',
     specialization: '⚡ Productivity & Time Management',
-    temperature: 0.6,  // Lower for more structured, practical advice
+    temperature: 0.6,
     maxTokens: 1500,
 
     topics: [
@@ -59,50 +58,16 @@ RESPONSE APPROACH (as Student Mate):
 Remember: Less is more. Help them SIMPLIFY, not add more stress!`
 };
 
-class CognitiveLoadAgent {
+class CognitiveLoadAgent extends BaseAgent {
     constructor() {
-        this.config = AGENT_CONFIG;
-    }
-
-    async handle(message, context = '', userPatterns = {}, profile = {}) {
-        console.log(`[${this.config.name}] Processing cognitive load request...`);
-
-        // Build unified Student Mate persona + agent specialization
-        const personaPrompt = getStudentMatePersona(profile, context, this.config.specialization);
-        const tonePrompt = getAdaptiveTone(userPatterns);
-        const continuityPrompt = getContinuityPrompt();
-
-        const fullSystemPrompt = personaPrompt + this.config.agentInstructions + tonePrompt + continuityPrompt;
-
-        // Build user prompt
-        const userPrompt = this.buildPrompt(message, userPatterns);
-
-        // Call LLM with unified persona
-        const llmResponse = await callLLM(
-            fullSystemPrompt,
-            userPrompt,
-            {
-                maxTokens: this.config.maxTokens,
-                temperature: this.config.temperature,
-                taskType: 'analysis'  // Use main model for cognitive analysis
-            }
-        );
-
-        if (llmResponse) {
-            return llmResponse;
-        }
-
-        // Friendly fallback
-        return this.getFriendlyFallback(message, profile);
+        super(AGENT_CONFIG);
     }
 
     buildPrompt(message, userPatterns) {
         let prompt = '';
-
         if (userPatterns?.currentWorkload) {
             prompt += `Note: Student's current workload is ${userPatterns.currentWorkload}.\n\n`;
         }
-
         prompt += `Student says: ${message}`;
         return prompt;
     }

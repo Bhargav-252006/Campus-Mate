@@ -1,10 +1,10 @@
 /**
  * 🧠 MOOD TOOLS - Log mood, history, trends, recommendations
+ *
+ * A1-A2 fix: Delegates to moodRepo (single source of truth for moods.json)
  */
-const {loadJSON, saveJSON, generateId, dataPath, logger} = require('./base');
-
-const MOODS_FILE = dataPath('moods.json');
-let moods = loadJSON(MOODS_FILE, {});
+const {logger} = require('./base');
+const {moodRepo} = require('../repositories');
 
 function getTimeOfDay() {
     const hour = new Date().getHours();
@@ -34,20 +34,15 @@ function getMoodResponse(mood, energy) {
     return responses[lowerMood] || defaultResponse;
 }
 
-function logMood({mood, energy = 5, notes = '', triggers = []}, userId) {
-    if (!moods[userId]) moods[userId] = [];
-
-    const moodEntry = {
-        id: generateId(), mood, energy, notes, triggers,
+async function logMood({mood, energy = 5, notes = '', triggers = []}, userId) {
+    const moodEntry = await moodRepo.add(userId, {
+        mood, energy, notes, triggers,
         timestamp: new Date().toISOString(),
         dayOfWeek: new Date().toLocaleDateString('en-US', {weekday: 'long'}),
         timeOfDay: getTimeOfDay()
-    };
+    });
 
-    moods[userId].push(moodEntry);
-    saveJSON(MOODS_FILE, moods);
     logger.debug(`Mood logged for ${userId}: ${mood}`);
-
     const response = getMoodResponse(mood, energy);
     return {
         message: `${response.emoji} Mood logged: ${mood} (Energy: ${energy}/10)`,
@@ -55,16 +50,8 @@ function logMood({mood, energy = 5, notes = '', triggers = []}, userId) {
     };
 }
 
-function getMoodHistory({days = 7, limit = 50}, userId) {
-    const userMoods = moods[userId] || [];
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - days);
-
-    const recent = userMoods
-        .filter(m => new Date(m.timestamp) >= cutoffDate)
-        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-        .slice(0, limit);
-
+async function getMoodHistory({days = 7, limit = 50}, userId) {
+    const recent = await moodRepo.getRecent(userId, days, limit);
     return {period: `Last ${days} days`, count: recent.length, entries: recent};
 }
 
@@ -82,12 +69,8 @@ function getMoodRecommendation(moodCounts, avgEnergyByTime) {
     return '✨ Keep tracking your mood to discover more patterns!';
 }
 
-function getMoodTrends({days = 30}, userId) {
-    const userMoods = moods[userId] || [];
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - days);
-
-    const recent = userMoods.filter(m => new Date(m.timestamp) >= cutoffDate);
+async function getMoodTrends({days = 30}, userId) {
+    const recent = await moodRepo.getRecent(userId, days, 9999);
     if (recent.length < 3) {
         return {message: 'Not enough data for trends. Keep logging your mood!', entriesNeeded: 3 - recent.length};
     }

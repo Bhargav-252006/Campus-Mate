@@ -4,6 +4,8 @@
  * All domain repositories extend this. Today it reads/writes JSON files;
  * tomorrow you swap the internals to SQLite / Mongo without touching
  * business logic in tools or services.
+ *
+ * P6 fix: Added prune() / pruneAll() to cap unbounded data growth.
  */
 
 const fs = require('fs');
@@ -11,6 +13,9 @@ const path = require('path');
 const logger = require('../utils/logger');
 
 const DATA_DIR = path.join(__dirname, '../../data');
+
+// P6: Default max items per user. Repos can override via this.maxItemsPerUser.
+const DEFAULT_MAX_ITEMS_PER_USER = 500;
 
 // Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) {
@@ -27,6 +32,7 @@ class BaseRepository {
         this.data = this._loadSync(defaultData);
         this._saveTimeout = null;
         this._dirty = false;
+        this.maxItemsPerUser = DEFAULT_MAX_ITEMS_PER_USER;
     }
 
     // ── Read ─────────────────────────────────────────────────
@@ -131,6 +137,40 @@ class BaseRepository {
         return [...items]
             .sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt))
             .slice(0, limit);
+    }
+
+    // ── P6: Pruning ─────────────────────────────────────────
+
+    /**
+     * Trim items for a single user to maxItemsPerUser, keeping the newest.
+     * Sorts by createdAt descending and drops the oldest overflow.
+     * @returns {number} Number of items pruned
+     */
+    async prune(userId) {
+        if (!Array.isArray(this.data[userId])) return 0;
+        const items = this.data[userId];
+        if (items.length <= this.maxItemsPerUser) return 0;
+
+        items.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        const pruned = items.length - this.maxItemsPerUser;
+        this.data[userId] = items.slice(0, this.maxItemsPerUser);
+        this._scheduleSave();
+        logger.info(`Pruned ${pruned} old items for user ${userId} in ${path.basename(this.filepath)}`);
+        return pruned;
+    }
+
+    /**
+     * Prune all users in this repository.
+     * @returns {number} Total items pruned across all users
+     */
+    async pruneAll() {
+        let total = 0;
+        for (const userId of Object.keys(this.data)) {
+            if (Array.isArray(this.data[userId])) {
+                total += await this.prune(userId);
+            }
+        }
+        return total;
     }
 
     // ── Helpers ──────────────────────────────────────────────

@@ -28,17 +28,17 @@ const SystemStats = lazy(() => import('./components/SystemStats'));
 
 // Loading fallback
 const PageLoader = () => (
-    <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '50vh'}}>
-        <div className="loading-spinner"></div>
+    <div className="app-loader">
+        <div className="loading-spinner" />
     </div>
 );
 
 // 404 page
 const NotFound = () => (
-    <div style={{textAlign: 'center', padding: '3rem'}}>
+    <div className="not-found-page">
         <h2>404 - Page Not Found</h2>
-        <p style={{color: '#666', margin: '1rem 0'}}>The page you're looking for doesn't exist.</p>
-        <Link to="/app" style={{color: '#3b82f6'}}>Go to Dashboard</Link>
+        <p>The page you're looking for doesn't exist.</p>
+        <Link to="/app" className="btn btn-primary">Go to Dashboard</Link>
     </div>
 );
 

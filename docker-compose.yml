@@ -1,0 +1,299 @@
+services:
+  # ============ LOCAL POSTGRES DATABASE ============
+  postgres:
+    image: postgres:15-alpine
+    container_name: campus-mate-postgres
+    environment:
+      POSTGRES_DB: campusmate
+      POSTGRES_USER: campusmate
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-campusmate_secret}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./server/scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - campus-mate-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U campusmate -d campusmate"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============ CORE SERVICES ============
+  api-gateway:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.gateway
+    container_name: campus-mate-gateway
+    ports:
+      - "3000:3000" # Only public-facing API port
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3000
+      AUTH_SERVICE_URL: http://auth-service:3001
+      CHAT_SERVICE_URL: http://chat-service:3002
+      DATA_SERVICE_URL: http://data-service:3003
+      ANALYTICS_SERVICE_URL: http://analytics-service:3004
+      MEMORY_SERVICE_URL: http://memory-service:3005
+      WEBHOOKS_SERVICE_URL: http://webhooks-service:3006
+      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      LOG_LEVEL: ${LOG_LEVEL:-warn}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost}
+      NODE_OPTIONS: "--max-old-space-size=80"
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: "ap-south-1"
+        awslogs-group: "campus-mate-logs"
+        awslogs-stream: "api-gateway"
+        awslogs-create-group: "true"
+    deploy:
+      resources:
+        limits:
+          memory: 96M
+        reservations:
+          memory: 48M
+    depends_on:
+      postgres:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      chat-service:
+        condition: service_healthy
+      data-service:
+        condition: service_healthy
+      analytics-service:
+        condition: service_healthy
+      memory-service:
+        condition: service_healthy
+      webhooks-service:
+        condition: service_healthy
+    networks:
+      - campus-mate-network
+    restart: unless-stopped
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.auth
+    container_name: campus-mate-auth
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3001
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_EXPIRY: ${JWT_EXPIRY:-24h}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      LOG_LEVEL: ${LOG_LEVEL:-warn}
+      NODE_OPTIONS: "--max-old-space-size=80"
+
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: "ap-south-1"
+        awslogs-group: "campus-mate-logs"
+        awslogs-stream: "auth-service"
+        awslogs-create-group: "true"
+    deploy:
+      resources:
+        limits:
+          memory: 96M
+        reservations:
+          memory: 48M
+    networks:
+      - campus-mate-network
+    restart: unless-stopped
+
+  chat-service:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.chat
+    container_name: campus-mate-chat
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3002
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-llama-3.3-70b-versatile}
+      LOG_LEVEL: ${LOG_LEVEL:-warn}
+      DATA_SERVICE_URL: http://data-service:3003
+      MEMORY_SERVICE_URL: http://memory-service:3005
+      LLM_PROVIDER: ${LLM_PROVIDER:-groq}
+      LLM_MODEL: ${LLM_MODEL:-llama-3.3-70b-versatile}
+      NODE_OPTIONS: "--max-old-space-size=140"
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: "ap-south-1"
+        awslogs-group: "campus-mate-logs"
+        awslogs-stream: "chat-service"
+        awslogs-create-group: "true"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 160M
+        reservations:
+          memory: 80M
+    networks:
+      - campus-mate-network
+    restart: unless-stopped
+
+  data-service:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.data
+    container_name: campus-mate-data
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3003
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      LOG_LEVEL: ${LOG_LEVEL:-warn}
+      NODE_OPTIONS: "--max-old-space-size=64"
+
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: "ap-south-1"
+        awslogs-group: "campus-mate-logs"
+        awslogs-stream: "data-service"
+        awslogs-create-group: "true"
+    deploy:
+      resources:
+        limits:
+          memory: 80M
+        reservations:
+          memory: 40M
+    networks:
+      - campus-mate-network
+    restart: unless-stopped
+
+  analytics-service:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.analytics
+    container_name: campus-mate-analytics
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3004
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      LOG_LEVEL: ${LOG_LEVEL:-warn}
+      NODE_OPTIONS: "--max-old-space-size=50"
+
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+        reservations:
+          memory: 32M
+    networks:
+      - campus-mate-network
+    restart: unless-stopped
+
+  memory-service:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.memory
+    container_name: campus-mate-memory
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3005
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:?DATA_ENCRYPTION_KEY is required}
+      LOG_LEVEL: ${LOG_LEVEL:-warn}
+      NODE_OPTIONS: "--max-old-space-size=64"
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+    deploy:
+      resources:
+        limits:
+          memory: 80M
+        reservations:
+          memory: 40M
+    networks:
+      - campus-mate-network
+    restart: unless-stopped
+
+  webhooks-service:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.webhooks
+    container_name: campus-mate-webhooks
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3006
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL is required}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:?WEBHOOK_SECRET is required}
+      LOG_LEVEL: ${LOG_LEVEL:-warn}
+      NODE_OPTIONS: "--max-old-space-size=50"
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+        reservations:
+          memory: 32M
+    networks:
+      - campus-mate-network
+    restart: unless-stopped
+
+  # ============ FRONTEND ============
+  client:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.client
+    container_name: campus-mate-client
+    ports:
+      - "80:80" # nginx serves the production build on port 80
+    deploy:
+      resources:
+        limits:
+          memory: 32M    # nginx is very lean
+        reservations:
+          memory: 16M
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    networks:
+      - campus-mate-network
+    restart: unless-stopped
+
+  # NOTE: Prometheus removed — saves ~150 MB RAM on t2.micro
+  # To re-enable monitoring: add it back and use a t3.small or larger
+
+networks:
+  campus-mate-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local

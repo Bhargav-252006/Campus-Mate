@@ -9,17 +9,17 @@ const logger = require('../utils/logger');
 // Main chat endpoint
 router.post('/', async (req, res) => {
     try {
-        const {message} = req.body;
-        const userId = req.userId;
+        const {message, clientRequestId} = req.body;
+        const userId = req.userId; // Always from auth middleware
 
         if (!message) {
             logger.warn('Chat request missing message');
             return res.status(400).json({error: "Message is required"});
         }
 
-        logger.user(userId, 'Chat request', message.substring(0, 50));
+        logger.user(userId, 'Chat request received');
 
-        const envelope = await conversationService.handleChat({userId, message});
+        const envelope = await conversationService.handleChat({userId, message, clientRequestId});
 
         res.json(envelope);
     } catch (error) {
@@ -31,7 +31,7 @@ router.post('/', async (req, res) => {
 // Get chat history
 router.get('/history', (req, res) => {
     try {
-        const userId = req.query.userId || 'user-123';
+        const userId = req.userId; // Always from auth middleware
         const history = conversationService.getHistory(userId);
         logger.debug(`Retrieved ${history.length} messages for ${userId}`);
         res.json(history);
@@ -44,7 +44,7 @@ router.get('/history', (req, res) => {
 // Clear chat history
 router.delete('/history', (req, res) => {
     try {
-        const userId = req.query.userId || 'user-123';
+        const userId = req.userId; // Always from auth middleware
         conversationService.clearHistory(userId);
         logger.info(`Chat history cleared for ${userId}`);
         res.json({success: true});

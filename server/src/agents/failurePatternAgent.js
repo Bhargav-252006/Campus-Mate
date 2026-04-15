@@ -1,5 +1,4 @@
-const {callLLM} = require('../utils/llmService');
-const {getStudentMatePersona, getAdaptiveTone, getContinuityPrompt} = require('./studentMatePersona');
+const {BaseAgent} = require('./BaseAgent');
 
 /**
  * FAILURE PATTERN AGENT - Specialized for Learning from Mistakes
@@ -70,51 +69,16 @@ RESPONSE APPROACH (as Student Mate):
 Remember: You're a detective finding patterns to help, not a judge! 🔍`
 };
 
-class FailurePatternAgent {
+class FailurePatternAgent extends BaseAgent {
     constructor() {
-        this.config = AGENT_CONFIG;
-    }
-
-    async handle(message, context = '', userPatterns = {}, profile = {}) {
-        console.log(`[${this.config.name}] Analyzing failure patterns...`);
-
-        // Build unified Student Mate persona + agent specialization
-        const personaPrompt = getStudentMatePersona(profile, context, this.config.specialization);
-        const tonePrompt = getAdaptiveTone(userPatterns);
-        const continuityPrompt = getContinuityPrompt();
-
-        const fullSystemPrompt = personaPrompt + this.config.agentInstructions + tonePrompt + continuityPrompt;
-
-        // Build user prompt with pattern context
-        const userPrompt = this.buildPrompt(message, userPatterns);
-
-        // Call LLM with unified persona
-        const llmResponse = await callLLM(
-            fullSystemPrompt,
-            userPrompt,
-            {
-                maxTokens: this.config.maxTokens,
-                temperature: this.config.temperature,
-                taskType: 'analysis'  // Use main model for pattern analysis
-            }
-        );
-
-        if (llmResponse) {
-            return llmResponse;
-        }
-
-        // Friendly fallback
-        return this.getFriendlyFallback(message, profile);
+        super(AGENT_CONFIG);
     }
 
     buildPrompt(message, userPatterns) {
         let prompt = '';
-
-        // Add previous mistakes if tracked
         if (userPatterns?.frequentMistakes && userPatterns.frequentMistakes.length > 0) {
             prompt += `Note: This student has previously struggled with: ${userPatterns.frequentMistakes.join(', ')}.\n\n`;
         }
-
         prompt += `Student says: ${message}`;
         return prompt;
     }

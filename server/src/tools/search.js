@@ -26,12 +26,41 @@ async function webSearch({query, maxResults = 5}, userId) {
         }
 
         if (results.length === 0) {
-            return {success: true, message: `No instant results for "${query}". Try a more specific search.`, results: [], suggestion: `For more comprehensive results, search directly: https://duckduckgo.com/?q=${encodedQuery}`};
+            // Fallback: search Wikipedia by keyword then fetch summary for the top result
+            try {
+                const wikiSearchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodedQuery}&format=json&origin=*&srlimit=1`;
+                const wikiSearchRes = await fetch(wikiSearchUrl);
+                if (wikiSearchRes.ok) {
+                    const wikiSearchData = await wikiSearchRes.json();
+                    const firstResult = wikiSearchData?.query?.search?.[0];
+                    if (firstResult) {
+                        const wikiTitle = encodeURIComponent(firstResult.title);
+                        const wikiSummaryRes = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${wikiTitle}`);
+                        if (wikiSummaryRes.ok) {
+                            const wikiData = await wikiSummaryRes.json();
+                            if (wikiData.extract) {
+                                results.push({
+                                    type: 'wikipedia',
+                                    title: wikiData.title,
+                                    snippet: wikiData.extract.split('. ').slice(0, 4).join('. ') + '.',
+                                    url: wikiData.content_urls?.desktop?.page
+                                });
+                            }
+                        }
+                    }
+                }
+            } catch (wikiErr) {
+                logger.warn('Wikipedia fallback search failed', wikiErr.message || wikiErr);
+            }
+        }
+
+        if (results.length === 0) {
+            return {success: true, message: `No instant results for "${query}".`, results: [], noResults: true, query};
         }
         return {success: true, query, resultCount: results.length, results, message: `🔍 Found ${results.length} result(s) for "${query}"`};
     } catch (error) {
         logger.error('Web search failed', error);
-        return {success: false, error: error.message, suggestion: `Search manually: https://duckduckgo.com/?q=${encodeURIComponent(query)}`};
+        return {success: false, error: error.message, noResults: true, query};
     }
 }
 

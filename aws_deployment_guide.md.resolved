@@ -1,0 +1,371 @@
+# 🚀 Campus Mate — AWS Deployment Guide
+
+This guide deploys the full microservices stack to a **single AWS EC2 instance** using Docker Compose — the simplest production-ready AWS setup.
+
+---
+
+## Architecture Overview
+
+```
+Internet
+   │
+   ▼
+EC2 (t3.medium)
+├── Nginx (port 80/443) ← your domain or EC2 public IP
+│   ├── /         → React frontend (nginx container, port 80)
+│   └── /api/*    → API Gateway (port 3000)
+│
+├── Docker Compose (all 8 containers)
+│   ├── client (nginx, serves React build)
+│   ├── api-gateway (port 3000)
+│   ├── auth-service (3001)
+│   ├── chat-service (3002) ← uses Gemini API
+│   ├── data-service (3003)
+│   ├── analytics-service (3004)
+│   ├── memory-service (3005)
+│   └── webhooks-service (3006)
+│
+├── External: Supabase (PostgreSQL)
+├── External: Redis Cloud
+└── External: Google Gemini API
+```
+
+---
+
+## Step 1 — Pre-Deploy Fixes (Do This First)
+
+### 1a. Fill in your `.env` file (root)
+
+Open `c:\Users\Bhargav\Desktop\mini - Copy\.env` and fill these in:
+
+```env
+# Required — get from https://aistudio.google.com/app/apikey
+GEMINI_API_KEY=AIza...your_actual_key_here
+
+# Required — generate strong secrets:
+# node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+JWT_SECRET=<64-char-hex>
+WEBHOOK_SECRET=<32-char-hex>
+DATA_ENCRYPTION_KEY=<32-char-hex>
+
+# Your EC2 public IP or domain (update after Step 3)
+ALLOWED_ORIGINS=http://YOUR_EC2_IP,https://yourdomain.com
+```
+
+> **Note:** The chat service now supports Gemini. `LLM_PROVIDER=gemini` is already set in `.env`.
+
+### 1b. Verify `server/.env` also has your Gemini key (for local dev only)
+
+```env
+GEMINI_API_KEY=AIza...your_actual_key_here
+```
+
+---
+
+## Step 2 — AWS Account Setup
+
+### 2a. Create an AWS Account
+Go to [https://aws.amazon.com](https://aws.amazon.com) → Create account. Use your email, add a credit card (free tier available).
+
+### 2b. Create an IAM User (don't use root!)
+1. Go to **IAM** → **Users** → **Create user**
+2. Name: `campus-mate-deploy`
+3. Attach policy: `AmazonEC2FullAccess` (or `AdministratorAccess` for simplicity)
+4. Create **Access Key** (Command Line Interface type)
+5. Download the CSV — you'll need `Access Key ID` and `Secret Access Key`
+
+### 2c. Install AWS CLI
+Download from: [https://aws.amazon.com/cli/](https://aws.amazon.com/cli/)
+
+Then configure:
+```powershell
+aws configure
+# AWS Access Key ID: (from CSV)
+# AWS Secret Access Key: (from CSV)
+# Default region: ap-south-1   # Mumbai (closest to India)
+# Default output format: json
+```
+
+---
+
+## Step 3 — Launch an EC2 Instance
+
+### 3a. Go to EC2 Console
+- Region: **Asia Pacific (Mumbai)** `ap-south-1`
+- Click **Launch Instance**
+
+### 3b. Instance Settings
+
+| Setting | Value |
+|---------|-------|
+| Name | `campus-mate-server` |
+| AMI | **Ubuntu Server 24.04 LTS** (free tier eligible) |
+| Instance type | **t3.medium** (2 vCPU, 4 GB RAM — needed for 8 containers) |
+| Key pair | Create new → name `campus-mate-key` → download `.pem` file |
+| Storage | 20 GB gp3 |
+
+### 3c. Security Group (Firewall Rules)
+Create a new security group with these **inbound rules**:
+
+| Type | Port | Source | Purpose |
+|------|------|--------|---------|
+| SSH | 22 | My IP | Remote access |
+| HTTP | 80 | 0.0.0.0/0 | Web traffic |
+| HTTPS | 443 | 0.0.0.0/0 | Secure web |
+| Custom TCP | 3000 | 0.0.0.0/0 | API Gateway (remove after HTTPS) |
+
+Click **Launch Instance**.
+
+### 3d. Allocate Elastic IP (Fixed Public IP)
+1. EC2 → **Elastic IPs** → **Allocate Elastic IP**
+2. **Associate** it to your `campus-mate-server` instance
+3. Note your **Elastic IP** — this is your server's permanent public IP
+
+---
+
+## Step 4 — Connect to EC2 and Install Docker
+
+### 4a. SSH into your server
+```powershell
+# Move key to a safe location first
+Move-Item "$env:USERPROFILE\Downloads\campus-mate-key.pem" "$env:USERPROFILE\.ssh\"
+
+# Connect (replace YOUR_ELASTIC_IP)
+ssh -i "$env:USERPROFILE\.ssh\campus-mate-key.pem" ubuntu@YOUR_ELASTIC_IP
+```
+
+### 4b. Install Docker + Docker Compose (run on EC2)
+```bash
+# Update packages
+sudo apt update && sudo apt upgrade -y
+
+# Install Docker
+curl -fsSL https://get.docker.com | sudo sh
+
+# Add ubuntu user to docker group (no sudo needed)
+sudo usermod -aG docker ubuntu
+
+# Logout and login again for group change
+exit
+```
+
+SSH back in, then:
+```bash
+# Verify Docker works
+docker --version
+docker compose version
+```
+
+---
+
+## Step 5 — Copy Your Project to EC2
+
+### Option A: Git (Recommended)
+```bash
+# On EC2:
+git clone https://github.com/YOUR_USERNAME/campus-mate.git
+cd campus-mate
+```
+
+> ⚠️ Make sure `.env` is in `.gitignore` and was NEVER committed.
+
+### Option B: SCP (Upload from Windows)
+```powershell
+# Run on your Windows machine — upload the project folder
+scp -i "$env:USERPROFILE\.ssh\campus-mate-key.pem" -r "c:\Users\Bhargav\Desktop\mini - Copy" ubuntu@YOUR_ELASTIC_IP:~/campus-mate
+```
+
+---
+
+## Step 6 — Create `.env` on EC2 (Secrets Go Here)
+
+```bash
+# On EC2, inside the project folder:
+cd ~/campus-mate
+nano .env
+```
+
+Paste this and fill in all values:
+```env
+NODE_ENV=production
+LOG_LEVEL=warn
+
+# Database (Supabase)
+DATABASE_URL=postgresql://postgres.fuolmomfenpdtsryvihx:YOUR_DB_PASSWORD@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres?sslmode=require
+
+# Redis
+REDIS_URL=redis://default:YOUR_REDIS_PASSWORD@redis-15182.c10.us-east-1-3.ec2.cloud.redislabs.com:15182
+
+# Secrets (generate these!)
+JWT_SECRET=<64-char-random-hex>
+WEBHOOK_SECRET=<32-char-random-hex>
+DATA_ENCRYPTION_KEY=<32-char-random-hex>
+
+# LLM — Gemini
+LLM_PROVIDER=gemini
+LLM_MODEL=gemini-1.5-flash
+GEMINI_MODEL=gemini-1.5-flash
+GEMINI_API_KEY=AIza...your_actual_key
+
+# CORS — your EC2 IP or domain
+ALLOWED_ORIGINS=http://YOUR_ELASTIC_IP,https://yourdomain.com
+```
+
+Save with `Ctrl+O`, exit with `Ctrl+X`.
+
+**Generate secrets on EC2:**
+```bash
+node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"  # JWT_SECRET
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"  # WEBHOOK_SECRET / DATA_ENCRYPTION_KEY
+```
+
+---
+
+## Step 7 — Build and Start All Containers
+
+```bash
+cd ~/campus-mate
+
+# Build all Docker images
+docker compose --env-file .env build --no-cache
+
+# Start all services in background
+docker compose --env-file .env up -d
+
+# Check all containers are running (should see 8 containers Up)
+docker compose ps
+
+# Tail logs to check for errors
+docker compose logs -f --tail=50
+```
+
+**Expected output from `docker compose ps`:**
+```
+campus-mate-gateway     Up     0.0.0.0:3000->3000/tcp
+campus-mate-auth        Up
+campus-mate-chat        Up
+campus-mate-data        Up
+campus-mate-analytics   Up
+campus-mate-memory      Up
+campus-mate-webhooks    Up
+campus-mate-client      Up     0.0.0.0:80->80/tcp
+```
+
+---
+
+## Step 8 — Test It Works
+
+```bash
+# Health check — should return {"status":"OK","service":"API Gateway"}
+curl http://localhost:3000/health
+
+# From your browser, open:
+# http://YOUR_ELASTIC_IP        → React frontend
+# http://YOUR_ELASTIC_IP:3000   → API Gateway
+```
+
+---
+
+## Step 9 — HTTPS with a Domain (Optional but Recommended)
+
+### 9a. Point your domain to EC2
+In your domain registrar's DNS settings, add:
+```
+Type: A
+Name: @  (or www)
+Value: YOUR_ELASTIC_IP
+```
+
+### 9b. Install Certbot on EC2
+```bash
+sudo apt install -y certbot
+sudo certbot certonly --standalone -d yourdomain.com -d www.yourdomain.com
+```
+
+### 9c. Update nginx.conf to enable HTTPS
+Add a server block for port 443 with SSL cert paths:
+```nginx
+server {
+    listen 443 ssl;
+    server_name yourdomain.com;
+    ssl_certificate /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
+    # ... rest of your existing config
+}
+```
+
+Then rebuild the client container:
+```bash
+docker compose build client
+docker compose up -d client
+```
+
+---
+
+## Step 10 — Keep It Running (Auto-Restart)
+
+Docker Compose already has `restart: unless-stopped` on all services, so containers restart automatically after EC2 reboots.
+
+To start everything after an EC2 restart:
+```bash
+cd ~/campus-mate && docker compose --env-file .env up -d
+```
+
+Make this automatic:
+```bash
+# Create a startup service
+sudo nano /etc/systemd/system/campus-mate.service
+```
+
+Paste:
+```ini
+[Unit]
+Description=Campus Mate Docker Compose
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/home/ubuntu/campus-mate
+ExecStart=/usr/bin/docker compose --env-file .env up -d
+ExecStop=/usr/bin/docker compose down
+User=ubuntu
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable it:
+```bash
+sudo systemctl enable campus-mate
+sudo systemctl start campus-mate
+```
+
+---
+
+## Costs (AWS)
+
+| Resource | Instance | Approx Cost/Month |
+|----------|----------|-------------------|
+| EC2 t3.medium | 24/7 | ~$30 USD |
+| Elastic IP (when attached) | Free | $0 |
+| Data transfer (first 100GB) | Free tier | $0 |
+| Supabase (free tier) | — | $0 |
+| Redis Cloud (free 30MB) | — | $0 |
+| Gemini API (free quota) | — | $0 |
+
+> **Tip:** Use a `t3.small` (~$15/mo) if you're low on budget — it may be slower but will work.
+
+---
+
+## Common Issues
+
+| Error | Fix |
+|-------|-----|
+| `GEMINI_API_KEY is required` | Set `GEMINI_API_KEY` in `.env` on EC2 |
+| Container keeps restarting | Run `docker compose logs <service-name>` to see the error |
+| Port 80 not accessible | Check Security Group inbound rules allow port 80 |
+| CORS error in browser | Add your EC2 IP/domain to `ALLOWED_ORIGINS` in `.env` and restart |
+| `docker: permission denied` | Run `sudo usermod -aG docker ubuntu` then logout/login |
+| DB connection failed | Check `DATABASE_URL` format — use Supabase Session Pooler URL |

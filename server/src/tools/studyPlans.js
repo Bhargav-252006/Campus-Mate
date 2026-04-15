@@ -1,11 +1,11 @@
 /**
  * 📚 STUDY PLAN TOOLS - Create plans, get tasks, mark complete
+ *
+ * A1-A2 fix: Delegates to studyPlanRepo & reminderRepo
+ * (single source of truth for studyPlans.json & reminders.json)
  */
-const {loadJSON, saveJSON, generateId, dataPath, logger} = require('./base');
-const reminders = require('./reminders');
-
-const STUDY_PLANS_FILE = dataPath('studyPlans.json');
-let studyPlans = loadJSON(STUDY_PLANS_FILE, {});
+const {generateId, logger} = require('./base');
+const {studyPlanRepo, reminderRepo} = require('../repositories');
 
 function generateStudyTasks(subject, duration, frequency, startDate) {
     const tasks = [];
@@ -30,55 +30,39 @@ function generateStudyTasks(subject, duration, frequency, startDate) {
     return tasks;
 }
 
-function createStudyPlan({subject, duration, frequency, startDate, goals = []}, userId) {
-    if (!studyPlans[userId]) studyPlans[userId] = [];
+async function createStudyPlan({subject, duration, frequency, startDate, goals = []}, userId) {
+    // E4 fix: Validate startDate, default to today if invalid/missing
+    const parsedStart = startDate ? new Date(startDate) : new Date();
+    if (isNaN(parsedStart.getTime())) {
+        return {message: 'Invalid start date. Please provide a valid date.', plan: null};
+    }
 
-    const plan = {
-        id: generateId(), subject, duration, frequency,
-        startDate: new Date(startDate).toISOString(), goals,
-        tasks: generateStudyTasks(subject, duration, frequency, startDate),
-        createdAt: new Date().toISOString(), active: true
-    };
+    const plan = await studyPlanRepo.add(userId, {
+        subject, duration, frequency,
+        startDate: parsedStart.toISOString(), goals,
+        tasks: generateStudyTasks(subject, duration, frequency, parsedStart),
+        active: true
+    });
 
-    studyPlans[userId].push(plan);
-    saveJSON(STUDY_PLANS_FILE, studyPlans);
     logger.debug(`Study plan created for ${userId}: ${subject}`);
-
     return {message: `📚 Study plan created for ${subject}!`, plan};
 }
 
-function getStudyPlan({subject = null}, userId) {
-    const userPlans = studyPlans[userId] || [];
+async function getStudyPlan({subject = null}, userId) {
     if (subject) {
-        const plan = userPlans.find(p =>
-            p.subject.toLowerCase() === subject.toLowerCase() && p.active
-        );
+        const plan = await studyPlanRepo.getBySubject(userId, subject);
         return plan || {message: `No active study plan found for ${subject}`};
     }
-    return {count: userPlans.filter(p => p.active).length, plans: userPlans.filter(p => p.active)};
+    const activePlans = await studyPlanRepo.getActive(userId);
+    return {count: activePlans.length, plans: activePlans};
 }
 
-function getTodaysTasks(params, userId) {
+async function getTodaysTasks(params, userId) {
     const today = new Date().toISOString().split('T')[0];
-    const userPlans = studyPlans[userId] || [];
-    const todaysTasks = [];
-
-    userPlans.forEach(plan => {
-        if (!plan.active) return;
-        plan.tasks.forEach(task => {
-            if (task.scheduledDate === today && !task.completed) {
-                todaysTasks.push({...task, subject: plan.subject, planId: plan.id});
-            }
-        });
-    });
+    const todaysTasks = await studyPlanRepo.getTodaysTasks(userId);
 
     // Also check reminders for today
-    const reminderData = reminders._getData();
-    const userReminders = reminderData[userId] || [];
-    const todaysReminders = userReminders.filter(r => {
-        const reminderDate = new Date(r.datetime).toISOString().split('T')[0];
-        return reminderDate === today && !r.completed;
-    });
+    const todaysReminders = await reminderRepo.getForDate(userId, today);
 
     return {
         date: today, studyTasks: todaysTasks, reminders: todaysReminders,
@@ -86,15 +70,15 @@ function getTodaysTasks(params, userId) {
     };
 }
 
-function markTaskComplete({taskId, planId}, userId) {
-    const userPlans = studyPlans[userId] || [];
-    for (const plan of userPlans) {
+async function markTaskComplete({taskId, planId}, userId) {
+    const plans = await studyPlanRepo.getByUserId(userId);
+    for (const plan of plans) {
         if (planId && plan.id !== planId) continue;
-        const task = plan.tasks.find(t => t.id === taskId);
+        const task = (plan.tasks || []).find(t => t.id === taskId);
         if (task) {
             task.completed = true;
             task.completedAt = new Date().toISOString();
-            saveJSON(STUDY_PLANS_FILE, studyPlans);
+            await studyPlanRepo.update(userId, plan.id, {tasks: plan.tasks});
             return {success: true, message: `✅ Great job! Completed: ${plan.subject} study session`};
         }
     }

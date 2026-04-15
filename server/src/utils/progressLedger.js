@@ -320,9 +320,24 @@ class ProgressLedger {
      * Start auto-cleanup of old tasks
      */
     startAutoCleanup() {
-        setInterval(() => {
+        // P8 fix: Store interval ref so it can be cleared on shutdown
+        this._cleanupInterval = setInterval(() => {
             this.cleanupOldTasks();
         }, CONFIG.AUTO_CLEANUP_INTERVAL);
+        // Don't keep the process alive just for cleanup
+        if (this._cleanupInterval.unref) {
+            this._cleanupInterval.unref();
+        }
+    }
+
+    /**
+     * Stop auto-cleanup (call on shutdown)
+     */
+    stopAutoCleanup() {
+        if (this._cleanupInterval) {
+            clearInterval(this._cleanupInterval);
+            this._cleanupInterval = null;
+        }
     }
 
     /**

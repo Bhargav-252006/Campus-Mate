@@ -19,11 +19,25 @@ const GEMINI_ROUTING_MODEL = process.env.GEMINI_ROUTING_MODEL || 'gemini-2.5-fla
 const SINGLE_MODEL = 'meta-llama/Meta-Llama-3.1-8B-Instruct';       // Bytez ID (cloud fallback)
 const HF_MODEL = 'meta-llama/Llama-3.1-8B-Instruct';                // HuggingFace ID (cloud fallback)
 const OR_MODEL = 'meta-llama/llama-3.1-8b-instruct:free';           // OpenRouter free tier (cloud fallback)
+const OR_HEAVY_REASONING_MODEL = process.env.OPENROUTER_HEAVY_REASONING_MODEL || 'nvidia/nemotron-3-super-120b-a12b:free';
+const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
+const DEEPSEEK_HEAVY_MODEL = process.env.DEEPSEEK_HEAVY_MODEL || 'deepseek-reasoner';
 
 const STRUCTURED_TASK_TYPES = new Set(['classification', 'routing', 'summarization', 'evaluation']);
+const HEAVY_REASONING_TASK_TYPES = new Set(['heavy_reasoning', 'analysis']);
+
+// P4 fix: Cache these at module level to avoid require() in hot path
+let llmTraceEnabled = null;
+let statsRepoRef = null;
 
 const selectGeminiModel = (taskType) => (
     STRUCTURED_TASK_TYPES.has(taskType) ? config.gemini.routingModel : config.gemini.model
+);
+
+const selectOpenRouterModel = (taskType) => (
+    HEAVY_REASONING_TASK_TYPES.has(taskType)
+        ? config.openrouter.taskModels.HEAVY_REASONING
+        : config.openrouter.model
 );
 
 // All task types point to the same model
@@ -33,7 +47,8 @@ const TASK_MODELS = {
     TOOLS: SINGLE_MODEL,
     SUMMARIZATION: SINGLE_MODEL,
     RESEARCH: SINGLE_MODEL,
-    CREATIVE: SINGLE_MODEL
+    CREATIVE: SINGLE_MODEL,
+    HEAVY_REASONING: OR_HEAVY_REASONING_MODEL
 };
 
 // Fallback if Bytez is unavailable
@@ -69,7 +84,7 @@ const config = {
         baseUrl: 'https://openrouter.ai/api/v1',
         model: process.env.OPENROUTER_MODEL || OR_MODEL,
         taskModels: TASK_MODELS,
-        freeModels: [OR_MODEL],
+        freeModels: [...new Set([OR_MODEL, OR_HEAVY_REASONING_MODEL])],
         fallbackModels: FALLBACK_MODELS
     },
 
@@ -77,12 +92,20 @@ const config = {
         apiKey: process.env.HUGGINGFACE_API_KEY,
         baseUrl: 'https://router.huggingface.co/v1',
         model: process.env.HUGGINGFACE_MODEL || HF_MODEL  // Llama (no Meta- prefix)
+    },
+
+    deepseek: {
+        apiKey: process.env.DEEPSEEK_API_KEY,
+        baseUrl: 'https://api.deepseek.com/v1',
+        model: DEEPSEEK_MODEL,
+        heavyModel: DEEPSEEK_HEAVY_MODEL
     }
 };
 
 // Startup logging
 logger.separator('LLM SERVICE CONFIGURATION');
-logger.info(`Provider: ${config.provider}`);
+logger.info(`Provider: ${config.provider} (normal tasks)`);
+logger.info(`Heavy tasks → DeepSeek: ${config.deepseek.apiKey ? `✓ ${config.deepseek.heavyModel}` : '✗ No key'}`);
 if (config.provider === 'ollama') {
     logger.info(`Ollama URL: ${config.ollama.baseUrl}`);
     logger.info(`Ollama Model: ${config.ollama.model}`);
@@ -111,6 +134,10 @@ if (config.provider === 'gemini' && !config.gemini.apiKey) {
     if (!config.huggingface.apiKey) {
         logger.warn('No API key! Get FREE key at: https://huggingface.co/settings/tokens');
     }
+} else if (config.provider === 'deepseek') {
+    if (!config.deepseek.apiKey) {
+        logger.warn('No DeepSeek API key! Set DEEPSEEK_API_KEY in server/.env');
+    }
 }
 
 /**
@@ -121,6 +148,14 @@ const selectModel = (taskType) => {
         const model = selectGeminiModel(taskType);
         if (taskType && taskType !== 'default') {
             logger.debug(`Task: ${taskType} → Gemini Model: ${model}`);
+        }
+        return model;
+    }
+
+    if (config.provider === 'openrouter') {
+        const model = selectOpenRouterModel(taskType);
+        if (taskType && taskType !== 'default') {
+            logger.debug(`Task: ${taskType} → OpenRouter Model: ${model}`);
         }
         return model;
     }
@@ -136,9 +171,17 @@ const selectModel = (taskType) => {
  */
 const callLLM = async (systemPrompt, userMessage, options = {}, conversationHistory = []) => {
     const startTime = Date.now();
-    const activeModel = config.provider === 'ollama'
-        ? config.ollama.model
-        : (options.model || selectModel(options.taskType));
+    const toolSchemas = options.toolSchemas || null;
+    const isHeavyTask = HEAVY_REASONING_TASK_TYPES.has(options.taskType);
+    const shouldPreferOpenRouter = isHeavyTask && !!config.openrouter.apiKey && config.provider !== 'deepseek' && config.provider !== 'gemini';
+    const preferredOpenRouterModel = options.model || selectOpenRouterModel(options.taskType);
+    const activeModel = isHeavyTask && config.deepseek?.apiKey
+        ? config.deepseek.heavyModel
+        : shouldPreferOpenRouter
+            ? preferredOpenRouterModel
+            : config.provider === 'ollama'
+                ? config.ollama.model
+                : (options.model || selectModel(options.taskType));
     logger.debug('callLLM invoked', {
         provider: config.provider,
         model: activeModel,
@@ -148,24 +191,85 @@ const callLLM = async (systemPrompt, userMessage, options = {}, conversationHist
     let usedProvider = null;
     let result = null;
 
+    const isProviderOpenRouter = config.provider === 'openrouter';
+
+    // 0️⃣ Try DeepSeek for heavy reasoning tasks (always, regardless of provider)
+    if (!result && isHeavyTask && config.deepseek?.apiKey) {
+        logger.llm('DeepSeek', 'attempting', `Calling ${config.deepseek.heavyModel} for heavy task...`);
+        result = await callDeepSeek(systemPrompt, userMessage, {...options, model: config.deepseek.heavyModel}, conversationHistory);
+        if (result) {usedProvider = 'deepseek';}
+        else {logger.warn('DeepSeek heavy reasoning failed — falling back');}
+    }
+
     // 1️⃣ Try Ollama (local — fastest, free, no rate limits)
-    if (config.provider === 'ollama') {
+    if (config.provider === 'ollama' && !shouldPreferOpenRouter && !result) {
         logger.llm('Ollama', 'attempting', `Calling local ${config.ollama.model}...`);
         result = await callOllama(systemPrompt, userMessage, options, conversationHistory);
         if (result) {usedProvider = 'ollama';}
         else {logger.warn('Ollama failed — falling back to cloud providers');}
     }
 
+    if (!result && shouldPreferOpenRouter) {
+        const openRouterOptions = {
+            ...options,
+            model: preferredOpenRouterModel,
+            skipFallback: true
+        };
+        logger.llm('OpenRouter', 'attempting', `Calling preferred heavy reasoning model ${preferredOpenRouterModel}...`);
+        result = await callOpenRouter(systemPrompt, userMessage, openRouterOptions, conversationHistory);
+        if (result) {
+            usedProvider = 'openrouter';
+        } else {
+            logger.warn('Preferred OpenRouter heavy reasoning model failed — falling back to the standard provider chain');
+        }
+    }
+
+    // 1.6️⃣ If OpenRouter is selected as primary provider, try it before Gemini/other cloud fallbacks.
+    if (!result && isProviderOpenRouter && config.openrouter.apiKey) {
+        const openRouterOptions = {
+            ...options,
+            model: options.model || selectOpenRouterModel(options.taskType)
+        };
+        logger.llm('OpenRouter', 'attempting', `Calling primary model ${openRouterOptions.model}...`);
+        result = await callOpenRouter(systemPrompt, userMessage, openRouterOptions, conversationHistory);
+        if (result) {
+            usedProvider = 'openrouter';
+        } else {
+            logger.warn('Primary OpenRouter call failed — falling back to other cloud providers');
+        }
+    }
+
+    // 1.5️⃣ (DeepSeek for heavy tasks already handled in step 0)
+
     // 2️⃣ Try Gemini (cloud primary)
-    if (!result && config.gemini.apiKey) {
+    if (!result && config.gemini.apiKey && !isProviderOpenRouter) {
         const geminiOptions = {
             ...options,
             model: options.model || selectGeminiModel(options.taskType)
         };
-        logger.llm('Gemini', 'attempting', `Calling ${geminiOptions.model}...`);
-        result = await callGemini(systemPrompt, userMessage, geminiOptions, conversationHistory);
-        if (result) {usedProvider = 'gemini';}
-        else {logger.warn('Gemini failed — falling back to next provider');}
+        // If tool schemas are provided, use native function calling
+        if (toolSchemas && toolSchemas.length > 0) {
+            logger.llm('Gemini', 'attempting', `Calling ${geminiOptions.model} with ${toolSchemas.length} tool schemas...`);
+            const toolResult = await callGeminiWithTools(systemPrompt, userMessage, geminiOptions, conversationHistory, toolSchemas);
+            if (toolResult) {
+                usedProvider = 'gemini';
+                // Attach structured result as metadata on the string for the caller
+                if (toolResult.type === 'tool_calls') {
+                    result = JSON.stringify({__toolCalls: true, toolCalls: toolResult.toolCalls, content: toolResult.content, model: toolResult.model});
+                } else {
+                    result = toolResult.content;
+                }
+            } else {
+                logger.warn('Gemini (tools) failed — falling back to plain Gemini');
+                // Fall through to plain Gemini below
+            }
+        }
+        if (!result) {
+            logger.llm('Gemini', 'attempting', `Calling ${geminiOptions.model}...`);
+            result = await callGemini(systemPrompt, userMessage, geminiOptions, conversationHistory);
+            if (result) {usedProvider = 'gemini';}
+            else {logger.warn('Gemini failed — falling back to next provider');}
+        }
     }
 
     // Always use the single model for cloud providers
@@ -188,7 +292,7 @@ const callLLM = async (systemPrompt, userMessage, options = {}, conversationHist
     }
 
     // 5️⃣ Try OpenRouter (last fallback)
-    if (!result && config.openrouter.apiKey) {
+    if (!result && config.openrouter.apiKey && !isProviderOpenRouter) {
         logger.llm('OpenRouter', 'attempting', `Calling ${OR_MODEL}...`);
         result = await callOpenRouter(systemPrompt, userMessage, options, conversationHistory);
         if (result) {usedProvider = 'openrouter';}
@@ -196,12 +300,20 @@ const callLLM = async (systemPrompt, userMessage, options = {}, conversationHist
 
     const latency = Date.now() - startTime;
 
-    // LLM trace logging
-    try {
-        const features = require('../config/features');
-        if (features.ENABLE_LLM_TRACING) {
-            const {statsRepo} = require('../repositories');
-            statsRepo.addTrace({
+    // LLM trace logging (P4 fix: moved requires to top-level lazy-loaded refs)
+    if (llmTraceEnabled === null) {
+        try {
+            const features = require('../config/features');
+            llmTraceEnabled = !!features.ENABLE_LLM_TRACING;
+        } catch (_) {llmTraceEnabled = false;}
+    }
+    if (llmTraceEnabled) {
+        try {
+            if (!statsRepoRef) {
+                const {statsRepo} = require('../repositories');
+                statsRepoRef = statsRepo;
+            }
+            statsRepoRef.addTrace({
                 type: 'llm_call',
                 provider: usedProvider || 'none',
                 model: activeModel,
@@ -211,8 +323,8 @@ const callLLM = async (systemPrompt, userMessage, options = {}, conversationHist
                 latencyMs: latency,
                 success: !!result,
             }).catch(() => { });
-        }
-    } catch (_) { /* config not loaded yet on first call — ignore */}
+        } catch (_) { /* statsRepo not available */}
+    }
 
     if (!result) {
         logger.warn('All providers (local + cloud) unavailable — returning null');
@@ -308,16 +420,10 @@ const callOllama = async (systemPrompt, userMessage, options = {}, conversationH
         const promptEvalCount = data?.prompt_eval_count || 0;
 
         logger.llm('Ollama', 'success', `Response in ${duration}ms from local ${model}`);
-
-        console.log(`\n${'='.repeat(70)}`);
-        console.log(`📊 OLLAMA LOCAL RESPONSE`);
-        console.log(`${'='.repeat(70)}`);
-        console.log(`🤖 Model: ${model} (LOCAL)`);
-        console.log(`📥 Prompt Tokens: ${promptEvalCount}`);
-        console.log(`📤 Response Tokens: ${evalCount}`);
-        console.log(`⏱️  Duration: ${duration}ms`);
-        console.log(`📝 Response Preview: ${content.trim().substring(0, 100)}...`);
-        console.log(`${'='.repeat(70)}\n`);
+        logger.debug('Ollama metrics', {
+            model, promptTokens: promptEvalCount,
+            responseTokens: evalCount, durationMs: duration
+        });
 
         return content.trim();
 
@@ -367,7 +473,8 @@ const callGemini = async (systemPrompt, userMessage, options = {}, conversationH
                 'Authorization': `Bearer ${config.gemini.apiKey}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(body)
+            body: JSON.stringify(body),
+            signal: AbortSignal.timeout(30000) // P10: 30s timeout for cloud API
         });
 
         if (!response.ok) {
@@ -387,20 +494,184 @@ const callGemini = async (systemPrompt, userMessage, options = {}, conversationH
 
         const usage = data?.usage || {};
         logger.llm('Gemini', 'success', `Response in ${duration}ms from ${model}`);
-
-        console.log(`\n${'='.repeat(70)}`);
-        console.log(`📊 GEMINI RESPONSE`);
-        console.log(`${'='.repeat(70)}`);
-        console.log(`🤖 Model: ${model}`);
-        console.log(`📥 Input Tokens: ${usage.prompt_tokens || 0}`);
-        console.log(`📤 Output Tokens: ${usage.completion_tokens || 0}`);
-        console.log(`⏱️  Duration: ${duration}ms`);
-        console.log(`📝 Response Preview: ${content.trim().substring(0, 100)}...`);
-        console.log(`${'='.repeat(70)}\n`);
+        logger.debug(`Gemini metrics`, {
+            model, inputTokens: usage.prompt_tokens || 0,
+            outputTokens: usage.completion_tokens || 0, durationMs: duration
+        });
 
         return content.trim();
     } catch (error) {
-        logger.error('Gemini request failed', error);
+        if (error.name === 'TimeoutError') {
+            logger.warn('Gemini request timed out (30s)');
+        } else {
+            logger.error('Gemini request failed', error);
+        }
+        return null;
+    }
+};
+
+/**
+ * Call Gemini with native function calling (tools array).
+ * Returns an object: { type: 'text'|'tool_calls', content, toolCalls }
+ */
+const callGeminiWithTools = async (systemPrompt, userMessage, options = {}, conversationHistory = [], toolSchemas = []) => {
+    const startTime = Date.now();
+    const model = options.model || selectGeminiModel(options.taskType);
+
+    const messages = [{role: 'system', content: systemPrompt}];
+    conversationHistory.forEach(msg => {
+        const content = (msg.text || '').trim();
+        const role = msg.sender === 'user' ? 'user' : 'assistant';
+        if (content.length > 0) messages.push({role, content});
+    });
+    messages.push({role: 'user', content: userMessage});
+
+    const cleanedMessages = messages.filter(m => m.role !== 'assistant' || (m.content && m.content.trim()));
+    logger.debug('Gemini (with tools) request', {model, messagesCount: cleanedMessages.length, toolCount: toolSchemas.length});
+
+    try {
+        const body = {
+            model,
+            messages: cleanedMessages,
+            max_tokens: options.maxTokens || 800,
+            temperature: options.temperature || 0.7,
+            tools: toolSchemas,
+            tool_choice: 'auto'
+        };
+
+        if (model.startsWith('gemini-2.5')) {
+            body.reasoning_effort = options.reasoningEffort || 'low';
+        }
+
+        const response = await fetch(`${config.gemini.baseUrl}/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${config.gemini.apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body),
+            signal: AbortSignal.timeout(30000) // P10: 30s timeout for cloud API
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            logger.error(`Gemini (tools) API Error (${response.status})`, new Error(errorText));
+            return null;
+        }
+
+        const data = await response.json();
+        const duration = Date.now() - startTime;
+        const choice = data?.choices?.[0]?.message;
+        const usage = data?.usage || {};
+
+        logger.debug('Gemini (tools) metrics', {
+            model, inputTokens: usage.prompt_tokens || 0,
+            outputTokens: usage.completion_tokens || 0, durationMs: duration
+        });
+
+        if (choice?.tool_calls && choice.tool_calls.length > 0) {
+            const toolCalls = choice.tool_calls.map(tc => ({
+                id: tc.id,
+                name: tc.function.name,
+                args: JSON.parse(tc.function.arguments || '{}')
+            }));
+            logger.llm('Gemini', 'success', `Tool calls: ${toolCalls.map(t => t.name).join(', ')} in ${duration}ms`);
+            return {
+                type: 'tool_calls',
+                content: choice.content || '',
+                toolCalls,
+                model
+            };
+        }
+
+        const content = choice?.content;
+        if (!content || content.trim() === '') {
+            logger.warn('Gemini (tools) returned empty response');
+            return null;
+        }
+
+        logger.llm('Gemini', 'success', `Response in ${duration}ms from ${model}`);
+        return {type: 'text', content: content.trim(), toolCalls: [], model};
+    } catch (error) {
+        if (error.name === 'TimeoutError') {
+            logger.warn('Gemini (tools) request timed out (30s)');
+        } else {
+            logger.error('Gemini (tools) request failed', error);
+        }
+        return null;
+    }
+};
+
+/**
+ * Call DeepSeek API (OpenAI-compatible endpoint)
+ * Models: deepseek-chat (general), deepseek-reasoner (heavy reasoning)
+ */
+const callDeepSeek = async (systemPrompt, userMessage, options = {}, conversationHistory = []) => {
+    const startTime = Date.now();
+    const model = options.model || config.deepseek.model;
+
+    const messages = [{role: 'system', content: systemPrompt}];
+    conversationHistory.forEach(msg => {
+        const content = (msg.text || '').trim();
+        const role = msg.sender === 'user' ? 'user' : 'assistant';
+        if (content.length > 0) messages.push({role, content});
+    });
+    messages.push({role: 'user', content: userMessage});
+    const cleanedMessages = messages.filter(m => m.role !== 'assistant' || (m.content && m.content.trim()));
+
+    logger.debug('DeepSeek request', {model, messagesCount: cleanedMessages.length});
+
+    try {
+        const response = await fetch(`${config.deepseek.baseUrl}/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${config.deepseek.apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model,
+                messages: cleanedMessages,
+                max_tokens: options.maxTokens || 500,
+                temperature: options.temperature || 0.7
+            }),
+            signal: AbortSignal.timeout(60000) // P10: 60s timeout — reasoning models are slow
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            logger.error(`DeepSeek API Error (${response.status})`, new Error(errorText));
+            return null;
+        }
+
+        const data = await response.json();
+        const duration = Date.now() - startTime;
+
+        // deepseek-reasoner uses reasoning_content; deepseek-chat uses content
+        const message = data?.choices?.[0]?.message;
+        let content = message?.content;
+        if ((!content || content.trim() === '') && message?.reasoning_content) {
+            content = message.reasoning_content;
+        }
+
+        if (!content || content.trim() === '') {
+            logger.warn('DeepSeek returned empty response');
+            return null;
+        }
+
+        const usage = data?.usage || {};
+        logger.llm('DeepSeek', 'success', `Response in ${duration}ms from ${model}`);
+        logger.debug('DeepSeek metrics', {
+            model, inputTokens: usage.prompt_tokens || 0,
+            outputTokens: usage.completion_tokens || 0, durationMs: duration
+        });
+
+        return content.trim();
+    } catch (error) {
+        if (error.name === 'TimeoutError') {
+            logger.warn('DeepSeek request timed out (60s)');
+        } else {
+            logger.error('DeepSeek request failed', error);
+        }
         return null;
     }
 };
@@ -439,7 +710,8 @@ const callBytez = async (systemPrompt, userMessage, options = {}, conversationHi
                     messages: cleanedMessages,
                     max_tokens: options.maxTokens || 500,
                     temperature: options.temperature || 0.7
-                })
+                }),
+                signal: AbortSignal.timeout(30000) // P10: 30s timeout for cloud API
             });
 
             if (!response.ok) {
@@ -467,21 +739,19 @@ const callBytez = async (systemPrompt, userMessage, options = {}, conversationHi
 
             const usage = data?.usage || {};
             logger.llm('Bytez', 'success', `Response in ${duration}ms from ${model}`);
-
-            console.log(`\n${'='.repeat(70)}`);
-            console.log(`📊 BYTEZ RESPONSE`);
-            console.log(`${'='.repeat(70)}`);
-            console.log(`🤖 Model: ${model}`);
-            console.log(`📥 Input Tokens: ${usage.prompt_tokens || 0}`);
-            console.log(`📤 Output Tokens: ${usage.completion_tokens || 0}`);
-            console.log(`⏱️  Duration: ${duration}ms`);
-            console.log(`📝 Response Preview: ${content.trim().substring(0, 100)}...`);
-            console.log(`${'='.repeat(70)}\n`);
+            logger.debug('Bytez metrics', {
+                model, inputTokens: usage.prompt_tokens || 0,
+                outputTokens: usage.completion_tokens || 0, durationMs: duration
+            });
 
             return content.trim();
 
         } catch (error) {
-            logger.error('Bytez request failed', error);
+            if (error.name === 'TimeoutError') {
+                logger.warn('Bytez request timed out (30s)');
+            } else {
+                logger.error('Bytez request failed', error);
+            }
             return null;
         }
         break; // success — exit while loop
@@ -553,7 +823,8 @@ const callOpenRouter = async (systemPrompt, userMessage, options = {}, conversat
                     messages,
                     max_tokens: options.maxTokens || 500,
                     temperature: options.temperature || 0.7
-                })
+                }),
+                signal: AbortSignal.timeout(45000) // P10: 45s timeout (reasoning models can be slow)
             });
 
             if (!response.ok) {
@@ -610,24 +881,21 @@ const callOpenRouter = async (systemPrompt, userMessage, options = {}, conversat
             logger.llm('OpenRouter', 'success', `Response in ${duration}ms from ${modelUsed}`);
 
             if (isFallback) {
-                console.log(`\n✅ FALLBACK SUCCESS! Used ${modelUsed} instead of ${primaryModel}\n`);
+                logger.info(`Fallback success — used ${modelUsed} instead of ${primaryModel}`);
             }
 
-            console.log(`\n${'='.repeat(70)}`);
-            console.log(`📊 LLM RESPONSE METRICS`);
-            console.log(`${'='.repeat(70)}`);
-            console.log(`🤖 Model: ${modelUsed}`);
-            console.log(`📥 Input Tokens: ${inputTokens}`);
-            console.log(`📤 Output Tokens: ${outputTokens}`);
-            console.log(`📊 Total Tokens: ${totalTokens}`);
-            console.log(`⏱️  Duration: ${duration}ms`);
-            console.log(`📝 Response Preview: ${content.trim().substring(0, 100)}...`);
-            console.log(`${'='.repeat(70)}\n`);
+            logger.debug('OpenRouter metrics', {
+                model: modelUsed, inputTokens, outputTokens, totalTokens, durationMs: duration
+            });
 
             return content.trim();
 
         } catch (error) {
-            logger.error(`Error with model ${currentModel}:`, error);
+            if (error.name === 'TimeoutError') {
+                logger.warn(`OpenRouter request timed out (45s) for model ${currentModel}`);
+            } else {
+                logger.error(`Error with model ${currentModel}:`, error);
+            }
             lastError = {status: 'error', text: error.message, model: currentModel};
             // Try next fallback if available
             if (i < modelsToTry.length - 1) {
@@ -677,7 +945,8 @@ const callHuggingFace = async (systemPrompt, userMessage, options = {}) => {
                 messages: messages,
                 max_tokens: options.maxTokens || 500,
                 temperature: options.temperature || 0.7
-            })
+            }),
+            signal: AbortSignal.timeout(30000) // P10: 30s timeout for cloud API
         });
 
         if (!response.ok) {
@@ -698,19 +967,16 @@ const callHuggingFace = async (systemPrompt, userMessage, options = {}) => {
         }
 
         logger.llm('HuggingFace', 'success', `Response in ${duration}ms from ${model}`);
+        logger.debug('HuggingFace metrics', {model, durationMs: duration});
 
-        console.log(`\n${'='.repeat(70)}`);
-        console.log(`📊 HUGGING FACE RESPONSE`);
-        console.log(`${'='.repeat(70)}`);
-        console.log(`🤖 Model: ${model}`);
-        console.log(`⏱️  Duration: ${duration}ms`);
-        console.log(`📝 Response Preview: ${content.trim().substring(0, 100)}...`);
-        console.log(`${'='.repeat(70)}\n`);
-
-        return content.trim();  // ✅ FIX: was missing, causing all HF calls to return undefined
+        return content.trim();
 
     } catch (error) {
-        logger.error('HuggingFace request failed', error);
+        if (error.name === 'TimeoutError') {
+            logger.warn('HuggingFace request timed out (30s)');
+        } else {
+            logger.error('HuggingFace request failed', error);
+        }
         return null;
     }
 };
@@ -728,6 +994,8 @@ module.exports = {
     callLLM,
     callOllama,
     callGemini,
+    callGeminiWithTools,
+    callDeepSeek,
     callBytez,
     callOpenRouter,
     callHuggingFace,
@@ -742,5 +1010,6 @@ module.exports = {
     OLLAMA_MODEL,
     GEMINI_MAIN_MODEL,
     GEMINI_ROUTING_MODEL,
+    OR_HEAVY_REASONING_MODEL,
     config
 };

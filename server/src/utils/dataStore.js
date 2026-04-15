@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const logger = require('./logger');
 
 const DATA_DIR = path.join(__dirname, '../../data');
 
@@ -13,6 +14,8 @@ class DataStore {
         this.filepath = path.join(DATA_DIR, filename);
         this.data = this.load();
         this._saveTimeout = null;
+        this._writeInProgress = false;
+        this._dirty = false;
     }
 
     load() {
@@ -22,12 +25,13 @@ class DataStore {
                 return JSON.parse(content);
             }
         } catch (error) {
-            console.error(`Error loading ${this.filepath}:`, error);
+            logger.error(`DataStore: failed loading ${this.filepath}`, error);
         }
         return {};
     }
 
     save() {
+        this._dirty = true;
         // Debounced async save to avoid blocking event loop
         if (this._saveTimeout) {
             clearTimeout(this._saveTimeout);
@@ -39,11 +43,47 @@ class DataStore {
     }
 
     _performSave() {
+        if (!this._dirty) return;
+        if (this._writeInProgress) {
+            // Re-schedule if a write is already in flight
+            this._saveTimeout = setTimeout(() => {
+                this._saveTimeout = null;
+                this._performSave();
+            }, 500);
+            return;
+        }
+
         try {
+            this._writeInProgress = true;
             fs.promises.writeFile(this.filepath, JSON.stringify(this.data, null, 2))
-                .catch(err => console.error(`Error saving ${this.filepath}:`, err));
+                .then(() => {
+                    this._dirty = false;
+                    this._writeInProgress = false;
+                })
+                .catch(err => {
+                    this._writeInProgress = false;
+                    logger.error(`DataStore: save failed ${this.filepath}`, err);
+                });
         } catch (error) {
-            console.error(`Error saving ${this.filepath}:`, error);
+            this._writeInProgress = false;
+            logger.error(`DataStore: save failed ${this.filepath}`, error);
+        }
+    }
+
+    /**
+     * Force immediate synchronous save (for graceful shutdown).
+     */
+    forceSave() {
+        if (this._saveTimeout) {
+            clearTimeout(this._saveTimeout);
+            this._saveTimeout = null;
+        }
+        if (!this._dirty) return;
+        try {
+            fs.writeFileSync(this.filepath, JSON.stringify(this.data, null, 2));
+            this._dirty = false;
+        } catch (error) {
+            logger.error(`DataStore: forceSave failed ${this.filepath}`, error);
         }
     }
 
@@ -65,7 +105,7 @@ class DataStore {
         }
         const newItem = {
             ...item,
-            id: Date.now().toString(),
+            id: Date.now().toString(36) + Math.random().toString(36).substring(2),
             createdAt: new Date().toISOString()
         };
         this.data[userId].push(newItem);
@@ -114,11 +154,8 @@ class DataStore {
 const timetableStore = new DataStore('timetable.json');
 const examsStore = new DataStore('exams.json');
 const scheduleStore = new DataStore('schedule.json');
-const chatHistoryStore = new DataStore('chat-history.json');
-
 module.exports = {
     timetableStore,
     examsStore,
-    scheduleStore,
-    chatHistoryStore
+    scheduleStore
 };

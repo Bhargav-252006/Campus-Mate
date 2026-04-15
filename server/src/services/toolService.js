@@ -4,7 +4,7 @@
  * Single entry point: executeTool({ name, args, userId })
  * Handles: validation, logging, error normalization, event emission.
  *
- * Both LLM tool calls and n8n webhooks go through here.
+ * Both LLM tool calls and external webhooks go through here.
  */
 
 const registry = require('../tools/registry');
@@ -37,7 +37,7 @@ class ToolService {
         const result = await registry.execute(name, args, userId);
         const latency = Date.now() - startTime;
 
-        // Emit event for subscribers (stats, n8n, etc.)
+        // Emit event for subscribers (stats, etc.)
         const eventName = TOOL_EVENTS[name];
         if (eventName && result.success) {
             eventBus.emitEvent(eventName, {userId, tool: name, args, result: result.result});

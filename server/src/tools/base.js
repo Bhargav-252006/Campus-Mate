@@ -27,12 +27,9 @@ function loadJSON(filePath, defaultValue) {
 }
 
 function saveJSON(filePath, data) {
-    try {
-        fs.promises.writeFile(filePath, JSON.stringify(data, null, 2))
-            .catch(err => logger.error(`Failed to save ${filePath}`, err));
-    } catch (error) {
-        logger.error(`Failed to save ${filePath}`, error);
-    }
+    // P5 fix: fs.promises.writeFile returns a promise — just chain .catch()
+    fs.promises.writeFile(filePath, JSON.stringify(data, null, 2))
+        .catch(err => logger.error(`Failed to save ${filePath}`, err));
 }
 
 function generateId() {

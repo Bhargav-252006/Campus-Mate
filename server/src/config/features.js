@@ -7,7 +7,8 @@
 
 const config = {
     // ── Post-processing pipeline toggles ─────────────────────
-    ENABLE_SELF_EVAL: process.env.ENABLE_SELF_EVAL !== 'false',
+    // P7 fix: Self-eval defaults to OFF — it doubles latency with an extra LLM call per response
+    ENABLE_SELF_EVAL: process.env.ENABLE_SELF_EVAL === 'true',
     ENABLE_CONFIDENCE_SCORING: process.env.ENABLE_CONFIDENCE_SCORING !== 'false',
     ENABLE_STALL_DETECTION: process.env.ENABLE_STALL_DETECTION !== 'false',
     ENABLE_PROGRESS_LEDGER: process.env.ENABLE_PROGRESS_LEDGER !== 'false',
@@ -21,10 +22,8 @@ const config = {
     // ── LLM provider override (also in llmService) ──────────
     LLM_PROVIDER: process.env.LLM_PROVIDER || 'ollama',
 
-    // ── Event bus / integrations ─────────────────────────────
+    // ── Event bus ────────────────────────────────────────────
     ENABLE_EVENT_BUS: process.env.ENABLE_EVENT_BUS !== 'false',
-    ENABLE_N8N_BRIDGE: process.env.ENABLE_N8N_BRIDGE === 'true',
-    N8N_WEBHOOK_URL: process.env.N8N_WEBHOOK_URL || null,
 
     // ── Logging ──────────────────────────────────────────────
     ENABLE_LLM_TRACING: process.env.ENABLE_LLM_TRACING !== 'false',

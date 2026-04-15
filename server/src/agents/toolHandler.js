@@ -10,6 +10,7 @@
 
 const toolService = require('../services/toolService');
 const logger = require('../utils/logger');
+const {callLLM} = require('../utils/llmService');
 
 // ═══════════════════════════════════════════════════════════════
 //                    TOOL KEYWORDS (Direct Tool Triggers)
@@ -35,7 +36,7 @@ const TOOL_KEYWORDS = {
     generateQuiz: ['quiz me', 'test me', 'create quiz', 'generate quiz', 'practice questions', 'give me a quiz'],
 
     // Search
-    webSearch: ['search for', 'look up', 'find information', 'search the web', 'google'],
+    webSearch: ['search for', 'look up', 'find information', 'search the web', 'google', 'full form of', 'full form', 'what does stand for', 'abbreviation of', 'stands for', 'headquarters of', 'ceo of', 'capital of', 'population of', 'latest news', 'recent news', 'current news'],
     youtubeSearch: ['youtube', 'find videos', 'video tutorial', 'watch videos', 'educational video'],
 
     // Reminders
@@ -124,7 +125,10 @@ async function handleToolRequest(toolTrigger, message, userId, profile) {
                 result = await toolService.executeTool({name: 'startPomodoro', args: {subject, duration, breakTime: 5}, userId});
                 if (result.success) {
                     const r = result.result;
-                    responseText = `🍅 **Pomodoro Started!**\n\nFocus on **${subject}** for **${duration} minutes**.\n\n**Tips:**\n${r.tips.map(t => `- ${t}`).join('\n')}\n\nI'll be here when you're done! Say "end pomodoro" when finished. 💪`;
+                    const tips = r.tips?.map(t => `- ${t}`).join('\n') || '';
+                    responseText = `🍅 **Pomodoro Started!**\n\nFocus on **${subject}** for **${duration} minutes**.${tips ? `\n\n**Tips:**\n${tips}` : ''}\n\nSay "end pomodoro" when finished. 💪`;
+                } else {
+                    responseText = `Couldn't start a pomodoro session. Please try again.`;
                 }
                 break;
             }
@@ -158,7 +162,9 @@ async function handleToolRequest(toolTrigger, message, userId, profile) {
                 result = await toolService.executeTool({name: 'logMood', args: {mood, energy, notes: message, triggers: []}, userId});
                 if (result.success) {
                     const r = result.result;
-                    responseText = `${r.message}\n\n💡 **Suggestion:** ${r.suggestion}\n\n💙 ${r.affirmation}`;
+                    responseText = `${r.message}${r.suggestion ? `\n\n💡 **Suggestion:** ${r.suggestion}` : ''}${r.affirmation ? `\n\n💙 ${r.affirmation}` : ''}`;
+                } else {
+                    responseText = `Couldn't log your mood right now. Please try again.`;
                 }
                 break;
             }
@@ -246,8 +252,11 @@ async function handleToolRequest(toolTrigger, message, userId, profile) {
 
             // ═══════════ SEARCH ═══════════
             case 'webSearch': {
-                const query = extractAfterKeyword(message, ['search for', 'look up', 'find', 'search']);
-                if (!query) {responseText = "What would you like me to search for? 🔍"; break;}
+                // Strip factual trigger keywords to get the clean subject
+                const SEARCH_STRIP_KEYWORDS = ['search for', 'look up', 'find information', 'search the web', 'google', 'search', 'full form of', 'full form', 'what does', 'stand for', 'abbreviation of', 'stands for', 'headquarters of', 'ceo of', 'capital of', 'population of', 'latest news about', 'recent news about', 'current news about', 'news about', 'tell me about', 'what is the', 'what is'];
+                const rawQuery = extractAfterKeyword(message, SEARCH_STRIP_KEYWORDS) || message.trim();
+                const query = rawQuery || message.trim();
+                if (!query) {responseText = 'What would you like me to search for? 🔍'; break;}
                 result = await toolService.executeTool({name: 'webSearch', args: {query, maxResults: 5}, userId});
                 if (result.success && result.result.results?.length > 0) {
                     const r = result.result;
@@ -256,23 +265,26 @@ async function handleToolRequest(toolTrigger, message, userId, profile) {
                         responseText += `**${i + 1}. ${res.title}**\n${res.snippet}\n${res.url ? `🔗 ${res.url}\n` : ''}\n`;
                     });
                 } else {
-                    responseText = `I couldn't find instant results for "${query}". Try searching directly: https://duckduckgo.com/?q=${encodeURIComponent(query)}`;
+                    // No search results — ask LLM but instruct it to be honest
+                    const honestPrompt = `Answer the following question as accurately as possible. If you are not certain about specific facts (especially about local/regional institutions, people, or organizations), clearly say "I'm not sure" or "I don't have reliable information about this" rather than guessing. Do not fabricate details.`;
+                    const llmAnswer = await callLLM(honestPrompt, message, {taskType: 'heavy_reasoning', maxTokens: 400});
+                    responseText = llmAnswer
+                        ? `${llmAnswer}\n\n> ⚠️ No live search results found — this answer is from AI training data and may not be fully accurate. Verify at: https://duckduckgo.com/?q=${encodeURIComponent(query)}`
+                        : `I couldn't find results for "${query}". Try: https://duckduckgo.com/?q=${encodeURIComponent(query)}`;
                 }
                 break;
             }
             case 'wikipediaSummary': {
                 let topic = message.replace(/^(what is|who is|tell me about|define|wikipedia:?)\s*/i, '').trim();
                 topic = topic.replace(/[?.!]$/, '');
-                if (!topic) {responseText = "What topic would you like to learn about? 📚"; break;}
+                if (!topic) {responseText = 'What topic would you like to learn about? 📚'; break;}
                 result = await toolService.executeTool({name: 'wikipediaSummary', args: {topic, sentences: 4}, userId});
                 if (result.success && result.result.summary) {
                     const r = result.result;
-                    responseText = `📚 **${r.title}**\n\n${r.summary}\n\n🔗 [Read more on Wikipedia](${r.url})`;
-                } else if (result.result?.type === 'search') {
-                    const r = result.result;
-                    responseText = `📚 I found some related Wikipedia articles for "${topic}":\n\n${r.results.slice(0, 3).map((res, i) => `${i + 1}. **${res.title}**\n   ${res.snippet.substring(0, 100)}...`).join('\n\n')}`;
+                    // tool returns `topic` (title) and `fullUrl` (link)
+                    responseText = `📚 **${r.topic || r.title || topic}**\n\n${r.summary}\n\n🔗 [Read more on Wikipedia](${r.fullUrl || r.url})`;
                 } else {
-                    responseText = `I couldn't find a Wikipedia article for "${topic}". Try a different search term! 📚`;
+                    responseText = `I couldn't find a Wikipedia article for "${topic}". Try: https://en.wikipedia.org/w/index.php?search=${encodeURIComponent(topic)}`;
                 }
                 break;
             }
@@ -513,11 +525,16 @@ function extractDateTime(message) {
 
 function extractAfterKeyword(message, keywords) {
     const lowerMsg = message.toLowerCase();
-    for (const keyword of keywords) {
+    // Sort by length descending so longer/more-specific keywords match first
+    const sorted = [...keywords].sort((a, b) => b.length - a.length);
+    for (const keyword of sorted) {
         const index = lowerMsg.indexOf(keyword);
-        if (index !== -1) return message.substring(index + keyword.length).trim().replace(/[?.!]$/, '');
+        if (index !== -1) {
+            const after = message.substring(index + keyword.length).trim().replace(/[?.!]$/, '');
+            if (after.length > 0) return after;
+        }
     }
-    return message.trim().replace(/[?.!]$/, '');
+    return null;
 }
 
 module.exports = {
