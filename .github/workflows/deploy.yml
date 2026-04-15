@@ -1,0 +1,34 @@
+name: Campus Mate CI/CD Auto-Deploy
+
+on:
+  push:
+    branches:
+      - main
+      - v2-architecture
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: SSH into EC2 and Deploy Update
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            echo "Successfully connected to EC2 production instance!"
+            cd ~/campus-mate
+            
+            echo "Pulling latest code from GitHub..."
+            # Pull whatever branch triggered this action dynamically
+            git fetch --all
+            git checkout ${GITHUB_REF##*/}
+            git pull origin ${GITHUB_REF##*/}
+            
+            echo "Rebuilding updated Microservices & Client React Build..."
+            docker compose build client chat-service
+            docker compose up -d
+            
+            echo "Deployment to Remote EC2 Complete!"
